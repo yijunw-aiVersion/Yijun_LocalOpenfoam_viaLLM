@@ -1,0 +1,17 @@
+#!/bin/bash
+set -e
+cd "${0%/*}" || exit 1
+
+echo "=== blockMesh ==="
+blockMesh > log.blockMesh 2>&1
+
+echo "=== snappyHexMesh ==="
+snappyHexMesh -overwrite > log.snappyHexMesh 2>&1
+
+echo "=== simpleFoam ==="
+simpleFoam > log.simpleFoam 2>&1
+
+echo "=== foamToVTK ==="
+foamToVTK -latestTime > log.foamToVTK 2>&1
+
+echo "=== Done ==="

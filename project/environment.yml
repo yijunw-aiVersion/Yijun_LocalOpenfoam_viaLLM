@@ -1,0 +1,19 @@
+name: cfd-agent-test
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - numpy>=1.24
+  - matplotlib>=3.7
+  - pytest>=7.4
+  - pytest-cov>=4.1
+  - pydantic>=2.0
+  - jinja2>=3.1
+  - typer>=0.9
+  - rich>=13.0
+  # Visualization (Step 5); large download — install via conda-forge when possible
+  - pyvista>=0.43
+  - pip:
+      - crewai>=0.80
+      - pyyaml>=6.0

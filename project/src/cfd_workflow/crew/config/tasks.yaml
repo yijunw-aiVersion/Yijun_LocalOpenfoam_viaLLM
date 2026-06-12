@@ -1,0 +1,41 @@
+parse_task:
+  description: >
+    Parse the user prompt and extract raw simulation parameters (diameter, Re, velocity, fluid).
+  expected_output: >
+    ParsedParams object or a follow-up message listing missing required fields.
+  agent: parser_agent
+
+physics_task:
+  description: >
+    Complete and validate physics parameters from parsed input.
+  expected_output: >
+    CompleteParams JSON with diameter_m, reynolds, velocity_ms, fluid, nu, and density.
+  agent: physics_agent
+
+case_task:
+  description: >
+    Generate the OpenFOAM case directory from complete parameters.
+  expected_output: >
+    Path to case/ with all required OpenFOAM files and cylinder.stl.
+  agent: case_agent
+
+simulation_task:
+  description: >
+    Run the OpenFOAM solver pipeline (blockMesh → snappyHexMesh → simpleFoam → foamToVTK).
+  expected_output: >
+    Simulation step logs and residual summary; VTK output under case/VTK/.
+  agent: simulation_agent
+
+visualization_task:
+  description: >
+    Create velocity field and surface pressure figures from VTK output.
+  expected_output: >
+    PNG files velocity_field.png and surface_pressure.png under figures/.
+  agent: visualization_agent
+
+report_task:
+  description: >
+    Write run_report.json and run_report.md including agent trace for debugging.
+  expected_output: >
+    Human-readable and machine-readable run reports in the run directory.
+  agent: report_agent
