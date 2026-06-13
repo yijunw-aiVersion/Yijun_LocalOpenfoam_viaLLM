@@ -3,7 +3,7 @@
 Natural-language driven **2D cylinder flow** prototype using **OpenFOAM** (via Docker or local install).
 
 **User guide (run from top to bottom):** [`../USER_GUIDANCE.md`](../USER_GUIDANCE.md)  
-**Repo overview:** [`../README.md`](../README.md)
+**Development log:** [`../development_log.md`](../development_log.md)
 
 ---
 
@@ -153,6 +153,7 @@ PYTHONPATH=src python -m cfd_workflow.cli [OPTIONS] "NATURAL LANGUAGE PROMPT"
 | `--docker` | Run OpenFOAM inside `opencfd/openfoam-default:2412` |
 | `--output-dir PATH` | Output root (default: `../test`) |
 | `--dry-run` | Parse + generate case only; skip solver and plots |
+| `--max-iterations N` | `simpleFoam` outer iterations (default: 200) |
 
 ---
 

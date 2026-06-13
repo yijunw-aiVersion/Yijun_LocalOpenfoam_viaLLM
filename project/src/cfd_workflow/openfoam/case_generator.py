@@ -11,6 +11,8 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from cfd_workflow.models import CompleteParams
 
+DEFAULT_MAX_ITERATIONS = 200
+
 REQUIRED_CASE_FILES = [
     "system/blockMeshDict",
     "system/snappyHexMeshDict",
@@ -43,7 +45,12 @@ def compute_nu_from_params(params: CompleteParams) -> float:
     return params.velocity_ms * params.diameter_m / params.reynolds
 
 
-def _template_context(params: CompleteParams) -> dict:
+def compute_write_interval(max_iterations: int) -> int:
+    """OpenFOAM writeInterval — roughly four field dumps per run."""
+    return max(1, max_iterations // 4)
+
+
+def _template_context(params: CompleteParams, max_iterations: int = DEFAULT_MAX_ITERATIONS) -> dict:
     domain = compute_domain_size(params.diameter_m)
     r = domain["radius"]
     nu = compute_nu_from_params(params)
@@ -67,8 +74,16 @@ def _template_context(params: CompleteParams) -> dict:
         "seed_y": 0.0,
         "nx": 60,
         "ny": 40,
-        "end_time": 200,
-        "write_interval": 50,
+        "end_time": max_iterations,
+        "write_interval": compute_write_interval(max_iterations),
+    }
+
+
+def solver_settings(max_iterations: int = DEFAULT_MAX_ITERATIONS) -> dict[str, int]:
+    """Return solver iteration settings for reports and metadata."""
+    return {
+        "max_iterations": max_iterations,
+        "write_interval": compute_write_interval(max_iterations),
     }
 
 
@@ -94,7 +109,11 @@ def _templates_dir() -> Path:
     return Path(__file__).resolve().parents[3] / "templates" / "cylinder_2d"
 
 
-def render_case(params: CompleteParams, output_dir: Path) -> Path:
+def render_case(
+    params: CompleteParams,
+    output_dir: Path,
+    max_iterations: int = DEFAULT_MAX_ITERATIONS,
+) -> Path:
     """Render OpenFOAM case templates into output_dir."""
     output_dir = Path(output_dir)
     if output_dir.exists():
@@ -120,7 +139,7 @@ def render_case(params: CompleteParams, output_dir: Path) -> Path:
         "Allrun.j2": "Allrun",
     }
 
-    ctx = _template_context(params)
+    ctx = _template_context(params, max_iterations=max_iterations)
     for src, dst in template_map.items():
         target = output_dir / dst
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -134,6 +153,7 @@ def render_case(params: CompleteParams, output_dir: Path) -> Path:
         json.dumps(
             {
                 "prompt_params": params.model_dump(),
+                "solver": solver_settings(max_iterations),
                 "generated_at": datetime.now(timezone.utc).isoformat(),
             },
             indent=2,

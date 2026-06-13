@@ -70,8 +70,11 @@ export MPLCONFIGDIR=../test/.matplotlib
 cd project
 PYTHONPATH=src python -m cfd_workflow.cli --docker \
   "圆柱直径0.1米，雷诺数100，来流速度1米每秒。" \
+  --max-iterations 200 \
   --output-dir ../test
 ```
+
+Use `--max-iterations 500` (or any N ≥ 1) for longer `simpleFoam` runs. Default is **200** outer iterations.
 
 **Or use the helper script:**
 
@@ -122,3 +125,4 @@ pytest tests/unit -v
 | OpenFOAM | 2412 (`opencfd/openfoam-default:2412` via Docker) |
 | Orchestration | CrewAI Flow + stage agents |
 | Solver | `blockMesh` → `snappyHexMesh` → `simpleFoam` → `foamToVTK` |
+| Default iterations | 200 (`--max-iterations` to change) |

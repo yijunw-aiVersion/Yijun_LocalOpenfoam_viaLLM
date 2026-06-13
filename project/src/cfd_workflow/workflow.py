@@ -12,13 +12,17 @@ def run_workflow(
     output_root: Path,
     dry_run: bool = False,
     use_docker: bool = False,
+    max_iterations: int | None = None,
     on_line=None,
 ) -> dict:
     """Run NL → case → solver → plots pipeline via CrewAI Flow."""
+    from cfd_workflow.openfoam.case_generator import DEFAULT_MAX_ITERATIONS
+
     return run_workflow_flow(
         prompt,
         output_root,
         dry_run=dry_run,
         use_docker=use_docker,
+        max_iterations=max_iterations or DEFAULT_MAX_ITERATIONS,
         on_line=on_line,
     )

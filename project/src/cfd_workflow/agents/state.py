@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from crewai.flow.runtime import FlowState
 
 from cfd_workflow.models import CompleteParams, ParsedParams
+from cfd_workflow.openfoam.case_generator import DEFAULT_MAX_ITERATIONS
 
 
 class AgentTraceEntry(BaseModel):
@@ -31,6 +32,7 @@ class WorkflowState(FlowState):
     output_root: Path
     dry_run: bool = False
     use_docker: bool = False
+    max_iterations: int = DEFAULT_MAX_ITERATIONS
     on_line: Optional[Callable[[str], None]] = None
 
     run_id: str = ""

@@ -53,6 +53,12 @@ class ReportAgent(StageAgent):
             )
         if report.get("execution_mode"):
             md_lines.append(f"- **Execution:** {report['execution_mode']}")
+        if report.get("solver"):
+            s = report["solver"]
+            md_lines.append(
+                f"- **Solver:** max_iterations={s['max_iterations']}, "
+                f"write_interval={s['write_interval']}"
+            )
         if report.get("issues"):
             md_lines.extend(["", "## Issues", ""])
             md_lines.extend(f"- {issue}" for issue in report["issues"])

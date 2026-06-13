@@ -16,8 +16,6 @@ dependencies = [
     "rich>=13.0",
     "matplotlib>=3.7",
     "pyvista>=0.43",
-    "crewai>=0.80",
-    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]

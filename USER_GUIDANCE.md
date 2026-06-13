@@ -139,7 +139,16 @@ PYTHONPATH=src python -m cfd_workflow.cli [OPTIONS] "YOUR PROMPT HERE"
 |--------|---------|---------|
 | `--output-dir PATH` | `../test` | Root folder for timestamped `run_*` directories |
 | `--docker` | off | Run OpenFOAM in Docker (use this on macOS without local OpenFOAM) |
-| `--dry-run` | off | Parse + generate OpenFOAM case only; no solver |
+| `--dry-run` | off | Parse + generate OpenFOAM case only; skip solver |
+| `--max-iterations N` | `200` | `simpleFoam` outer iterations (`controlDict` `endTime`); `writeInterval` auto-set to `N/4` |
+
+**Longer simulation (500 iterations):**
+
+```bash
+PYTHONPATH=src python -m cfd_workflow.cli --docker --max-iterations 500 \
+  "圆柱直径0.1米，雷诺数100，来流速度1米每秒。" \
+  --output-dir ../test
+```
 
 **Parse / case only (no simulation):**
 
@@ -244,5 +253,5 @@ pytest tests/unit -v
 
 - [`project/README.md`](project/README.md) — environment, dependencies, OpenFOAM version
 - [`test/README.md`](test/README.md) — output folder conventions
-- [`README.md`](README.md) — repo overview and quick run
+- [`development_log.md`](development_log.md) — build history and design decisions
 - [`problem_description.md`](problem_description.md) — original requirements

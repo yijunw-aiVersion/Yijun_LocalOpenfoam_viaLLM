@@ -16,6 +16,7 @@ from cfd_workflow.agents import (
     VisualizationAgent,
     WorkflowState,
 )
+from cfd_workflow.openfoam.case_generator import DEFAULT_MAX_ITERATIONS
 
 
 class CFDWorkflowFlow(Flow[WorkflowState]):
@@ -79,6 +80,7 @@ def run_workflow_flow(
     output_root: Path,
     dry_run: bool = False,
     use_docker: bool = False,
+    max_iterations: int = DEFAULT_MAX_ITERATIONS,
     on_line=None,
 ) -> dict:
     """Execute the CFD workflow via CrewAI Flow and stage agents."""
@@ -87,6 +89,7 @@ def run_workflow_flow(
         output_root=Path(output_root),
         dry_run=dry_run,
         use_docker=use_docker,
+        max_iterations=max_iterations,
         on_line=on_line,
     )
     flow = CFDWorkflowFlow(initial_state=state, suppress_flow_events=True)

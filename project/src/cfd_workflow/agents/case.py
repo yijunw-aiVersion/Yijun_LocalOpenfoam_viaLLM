@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from cfd_workflow.agents.base import StageAgent
 from cfd_workflow.agents.state import WorkflowState
-from cfd_workflow.openfoam.case_generator import render_case, validate_case
+from cfd_workflow.openfoam.case_generator import render_case, solver_settings, validate_case
 
 
 class CaseAgent(StageAgent):
@@ -19,10 +19,11 @@ class CaseAgent(StageAgent):
             return "failed", msg
 
         case_dir = state.run_dir / "case"
-        render_case(state.params, case_dir)
+        render_case(state.params, case_dir, max_iterations=state.max_iterations)
         missing = validate_case(case_dir)
         state.case_dir = case_dir
         state.report["case_dir"] = str(case_dir)
+        state.report["solver"] = solver_settings(state.max_iterations)
 
         if missing:
             state.report["status"] = "failed"
@@ -35,4 +36,7 @@ class CaseAgent(StageAgent):
             state.report["status"] = "dry_run_complete"
             return "success", "Case generated (dry run — solver skipped)"
 
-        return "success", f"OpenFOAM case written to {case_dir}"
+        return "success", (
+            f"OpenFOAM case written to {case_dir} "
+            f"(max_iterations={state.max_iterations})"
+        )

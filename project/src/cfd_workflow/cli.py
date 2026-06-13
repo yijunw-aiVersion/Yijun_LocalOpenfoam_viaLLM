@@ -1,6 +1,8 @@
 import typer
 from pathlib import Path
 
+from cfd_workflow.openfoam.case_generator import DEFAULT_MAX_ITERATIONS
+
 app = typer.Typer(help="Natural language driven CFD workflow builder")
 
 
@@ -13,6 +15,12 @@ def run(
     ),
     dry_run: bool = typer.Option(False, help="Only parse and generate case, do not solve"),
     docker: bool = typer.Option(False, help="Run OpenFOAM inside Docker (opencfd/openfoam-default)"),
+    max_iterations: int = typer.Option(
+        DEFAULT_MAX_ITERATIONS,
+        "--max-iterations",
+        min=1,
+        help="simpleFoam outer iterations (controlDict endTime; default 200)",
+    ),
 ):
     """Run a full CFD workflow from natural language input."""
     from cfd_workflow.workflow import run_workflow
@@ -25,10 +33,17 @@ def run(
         output_root=output_dir.resolve(),
         dry_run=dry_run,
         use_docker=docker,
+        max_iterations=max_iterations,
         on_line=echo_line,
     )
     typer.echo(f"Status: {report['status']}")
     typer.echo(f"Run directory: {report['run_dir']}")
+    if report.get("solver"):
+        solver = report["solver"]
+        typer.echo(
+            f"Solver: max_iterations={solver['max_iterations']}, "
+            f"write_interval={solver['write_interval']}"
+        )
     if report.get("execution_mode"):
         typer.echo(f"Execution: {report['execution_mode']}")
     if report.get("issues"):
