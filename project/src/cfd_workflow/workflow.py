@@ -13,10 +13,12 @@ def run_workflow(
     dry_run: bool = False,
     use_docker: bool = False,
     max_iterations: int | None = None,
+    residual_tol: float | None = None,
     on_line=None,
 ) -> dict:
     """Run NL → case → solver → plots pipeline via CrewAI Flow."""
     from cfd_workflow.openfoam.case_generator import DEFAULT_MAX_ITERATIONS
+    from cfd_workflow.openfoam.monitor import DEFAULT_RESIDUAL_TOL
 
     return run_workflow_flow(
         prompt,
@@ -24,5 +26,6 @@ def run_workflow(
         dry_run=dry_run,
         use_docker=use_docker,
         max_iterations=max_iterations or DEFAULT_MAX_ITERATIONS,
+        residual_tol=residual_tol if residual_tol is not None else DEFAULT_RESIDUAL_TOL,
         on_line=on_line,
     )

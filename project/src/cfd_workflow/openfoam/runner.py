@@ -11,11 +11,12 @@ from typing import Callable, Optional
 
 from cfd_workflow.openfoam.case_generator import DEFAULT_MAX_ITERATIONS
 from cfd_workflow.openfoam.monitor import (
+    DEFAULT_RESIDUAL_TOL,
     SimulationProgress,
     format_progress_summary,
     is_converged,
     parse_residuals,
-    update_progress_from_line,
+    simplefoam_stream_handlers,
 )
 
 
@@ -25,6 +26,7 @@ class StepResult:
     returncode: int
     log_file: Path
     success: bool
+    stopped_early: bool = False
 
 
 def find_openfoam_env() -> Optional[Path]:
@@ -51,6 +53,15 @@ def openfoam_available() -> bool:
     return shutil.which("blockMesh") is not None or find_openfoam_env() is not None
 
 
+def _terminate_process(proc: subprocess.Popen[str]) -> None:
+    proc.terminate()
+    try:
+        proc.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
+
+
 def run_command(
     cmd: str,
     cwd: Path,
@@ -58,6 +69,7 @@ def run_command(
     on_line: Optional[Callable[[str], None]] = None,
     bashrc: Optional[Path] = None,
     on_solver_line: Optional[Callable[[str], None]] = None,
+    stop_when: Optional[Callable[[], bool]] = None,
 ) -> StepResult:
     cwd = Path(cwd)
     log_file = cwd / log_name
@@ -66,6 +78,7 @@ def run_command(
     else:
         shell_cmd = f'cd "{cwd}" && {cmd}'
 
+    stopped_early = False
     with log_file.open("w", encoding="utf-8") as log:
         proc = subprocess.Popen(
             shell_cmd,
@@ -83,13 +96,20 @@ def run_command(
                 on_line(stripped)
             if on_solver_line:
                 on_solver_line(stripped)
-        proc.wait()
+            if stop_when and stop_when():
+                stopped_early = True
+                _terminate_process(proc)
+                break
+        else:
+            proc.wait()
 
+    success = proc.returncode == 0 or stopped_early
     return StepResult(
         command=cmd,
         returncode=proc.returncode,
         log_file=log_file,
-        success=proc.returncode == 0,
+        success=success,
+        stopped_early=stopped_early,
     )
 
 
@@ -97,6 +117,7 @@ def run_simulation(
     case_dir: Path,
     on_line: Optional[Callable[[str], None]] = None,
     max_iterations: int = DEFAULT_MAX_ITERATIONS,
+    residual_tol: float = DEFAULT_RESIDUAL_TOL,
     progress: Optional[SimulationProgress] = None,
 ) -> tuple[list[StepResult], SimulationProgress]:
     case_dir = Path(case_dir)
@@ -107,7 +128,11 @@ def run_simulation(
             "or set WM_PROJECT_DIR so blockMesh/simpleFoam are on PATH."
         )
 
-    sim_progress = progress or SimulationProgress(max_iterations=max_iterations)
+    sim_progress = progress or SimulationProgress(
+        max_iterations=max_iterations,
+        residual_tol=residual_tol,
+    )
+    sim_progress.residual_tol = residual_tol
     steps = [
         ("blockMesh", "log.blockMesh"),
         ("snappyHexMesh -overwrite", "log.snappyHexMesh"),
@@ -122,13 +147,9 @@ def run_simulation(
             on_line(f"=== {cmd} ===")
 
         solver_line_cb: Optional[Callable[[str], None]] = None
+        stop_when_cb: Optional[Callable[[], bool]] = None
         if cmd == "simpleFoam":
-
-            def _on_solver_line(line: str, *, _progress: SimulationProgress = sim_progress) -> None:
-                if update_progress_from_line(_progress, line) and on_line:
-                    on_line(format_progress_summary(_progress))
-
-            solver_line_cb = _on_solver_line
+            solver_line_cb, stop_when_cb = simplefoam_stream_handlers(sim_progress, on_line)
 
         result = run_command(
             cmd,
@@ -137,6 +158,7 @@ def run_simulation(
             on_line=on_line if cmd != "simpleFoam" else None,
             bashrc=bashrc,
             on_solver_line=solver_line_cb,
+            stop_when=stop_when_cb,
         )
         results.append(result)
         if not result.success:
@@ -150,7 +172,7 @@ def run_simulation(
         sim_progress.residuals = parse_residuals(
             log_path.read_text(encoding="utf-8", errors="replace")
         )
-        sim_progress.converged = is_converged(sim_progress.residuals)
+        sim_progress.converged = is_converged(sim_progress.residuals, tol=sim_progress.residual_tol)
 
     if on_line and sim_progress.step == "simpleFoam":
         on_line(format_progress_summary(sim_progress))

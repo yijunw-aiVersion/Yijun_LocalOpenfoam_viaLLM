@@ -56,6 +56,19 @@ Optional: set `CREWAI_STORAGE_DIR=../test/.crewai` for CrewAI cache (bash: `expo
 
 ```bash
 cd Yijun_LocalOpenfoam_viaLLM/project
+conda env create -f environment.yml   # installs package + `nl-cfd-solver` CLI
+conda activate cfd-agent-test
+```
+
+If the env already exists, refresh the CLI after pulling code changes:
+
+```bash
+cd Yijun_LocalOpenfoam_viaLLM/project
+pip install -e .
+```
+
+```bash
+cd Yijun_LocalOpenfoam_viaLLM/project
 conda env create -f environment.yml
 conda activate cfd-agent-test
 ```
@@ -138,22 +151,25 @@ See [`../USER_GUIDANCE.md`](../USER_GUIDANCE.md) for prompts, result locations, 
 ```bash
 conda activate cfd-agent-test
 export DOCKER_HOST=unix://$HOME/.colima/default/docker.sock   # macOS Colima only
-
-cd Yijun_LocalOpenfoam_viaLLM/project
 export MPLCONFIGDIR=../test/.matplotlib
-PYTHONPATH=src python -m cfd_workflow.cli --docker \
+
+# From repo root (no PYTHONPATH needed after pip install -e .):
+./nl-cfd-solver --docker \
   "圆柱直径0.1米，雷诺数100，来流速度1米每秒。" \
-  --output-dir ../test
+  --output-dir test
+
+# Or, if `nl-cfd-solver` is on PATH from conda:
+nl-cfd-solver --docker \
+  "圆柱直径0.1米，雷诺数100，来流速度1米每秒。" \
+  --output-dir test
 ```
 
 **Minimal end-to-end command (Windows PowerShell):**
 
 ```powershell
 conda activate cfd-agent-test
-cd Yijun_LocalOpenfoam_viaLLM\project
 $env:MPLCONFIGDIR = "..\test\.matplotlib"
-$env:PYTHONPATH = "src"
-python -m cfd_workflow.cli --docker `
+nl-cfd-solver --docker `
   "圆柱直径0.1米，雷诺数100，来流速度1米每秒。" `
   --output-dir ..\test
 ```
@@ -195,6 +211,7 @@ PYTHONPATH=src python -m cfd_workflow.cli [OPTIONS] "NATURAL LANGUAGE PROMPT"
 | `--output-dir PATH` | Output root (default: `../test`) |
 | `--dry-run` | Parse + generate case only; skip solver and plots |
 | `--max-iterations N` | `simpleFoam` outer iterations (default: 200) |
+| `--residual-tol X` | Early-stop when U and p residuals ≤ X (default: `1e-5`) |
 
 ---
 

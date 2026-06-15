@@ -10,13 +10,14 @@ from typing import Callable, Optional
 
 from cfd_workflow.openfoam.case_generator import DEFAULT_MAX_ITERATIONS
 from cfd_workflow.openfoam.monitor import (
+    DEFAULT_RESIDUAL_TOL,
     SimulationProgress,
     format_progress_summary,
     is_converged,
     parse_residuals,
-    update_progress_from_line,
+    simplefoam_stream_handlers,
 )
-from cfd_workflow.openfoam.runner import StepResult
+from cfd_workflow.openfoam.runner import StepResult, _terminate_process
 
 DEFAULT_IMAGE = "opencfd/openfoam-default:2412"
 
@@ -60,6 +61,7 @@ def _run_docker_step(
     log_name: str,
     on_line: Optional[Callable[[str], None]] = None,
     on_solver_line: Optional[Callable[[str], None]] = None,
+    stop_when: Optional[Callable[[], bool]] = None,
 ) -> StepResult:
     inner = f"cd /case && {cmd}"
     docker_cmd = [
@@ -78,6 +80,7 @@ def _run_docker_step(
         inner,
     ]
     log_file = case_dir / log_name
+    stopped_early = False
     with log_file.open("w", encoding="utf-8") as log:
         proc = subprocess.Popen(
             docker_cmd,
@@ -94,14 +97,20 @@ def _run_docker_step(
                 on_line(stripped)
             if on_solver_line:
                 on_solver_line(stripped)
-        proc.wait()
+            if stop_when and stop_when():
+                stopped_early = True
+                _terminate_process(proc)
+                break
+        else:
+            proc.wait()
 
-    success = proc.returncode == 0 and _log_success(log_file)
+    success = (proc.returncode == 0 or stopped_early) and _log_success(log_file)
     return StepResult(
         command=f"docker: {cmd}",
         returncode=0 if success else 1,
         log_file=log_file,
         success=success,
+        stopped_early=stopped_early,
     )
 
 
@@ -111,6 +120,7 @@ def run_simulation_docker(
     on_line: Optional[Callable[[str], None]] = None,
     pull: bool = True,
     max_iterations: int = DEFAULT_MAX_ITERATIONS,
+    residual_tol: float = DEFAULT_RESIDUAL_TOL,
     progress: Optional[SimulationProgress] = None,
 ) -> tuple[list[StepResult], SimulationProgress]:
     """Run blockMesh → snappyHexMesh → simpleFoam → foamToVTK, one Docker step at a time."""
@@ -124,7 +134,11 @@ def run_simulation_docker(
     if pull:
         ensure_image(image, on_line=on_line)
 
-    sim_progress = progress or SimulationProgress(max_iterations=max_iterations)
+    sim_progress = progress or SimulationProgress(
+        max_iterations=max_iterations,
+        residual_tol=residual_tol,
+    )
+    sim_progress.residual_tol = residual_tol
     steps = [
         ("blockMesh", "log.blockMesh"),
         ("snappyHexMesh -overwrite", "log.snappyHexMesh"),
@@ -143,13 +157,9 @@ def run_simulation_docker(
             on_line(f"=== {cmd} ===")
 
         solver_line_cb: Optional[Callable[[str], None]] = None
+        stop_when_cb: Optional[Callable[[], bool]] = None
         if cmd == "simpleFoam":
-
-            def _on_solver_line(line: str, *, _progress: SimulationProgress = sim_progress) -> None:
-                if update_progress_from_line(_progress, line) and on_line:
-                    on_line(format_progress_summary(_progress))
-
-            solver_line_cb = _on_solver_line
+            solver_line_cb, stop_when_cb = simplefoam_stream_handlers(sim_progress, on_line)
 
         result = _run_docker_step(
             case_dir,
@@ -158,6 +168,7 @@ def run_simulation_docker(
             log_name,
             on_line=on_line if cmd != "simpleFoam" else None,
             on_solver_line=solver_line_cb,
+            stop_when=stop_when_cb,
         )
         results.append(result)
         if not result.success:
@@ -171,7 +182,7 @@ def run_simulation_docker(
         sim_progress.residuals = parse_residuals(
             log_path.read_text(encoding="utf-8", errors="replace")
         )
-        sim_progress.converged = is_converged(sim_progress.residuals)
+        sim_progress.converged = is_converged(sim_progress.residuals, tol=sim_progress.residual_tol)
 
     if on_line and sim_progress.step == "simpleFoam":
         on_line(format_progress_summary(sim_progress))

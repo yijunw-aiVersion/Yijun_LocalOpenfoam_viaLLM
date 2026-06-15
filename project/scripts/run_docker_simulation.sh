@@ -47,7 +47,7 @@ echo "==> [3/3] Run CFD workflow"
 cd "$PROJECT_DIR"
 export MPLCONFIGDIR="$TEST_DIR/.matplotlib"
 mkdir -p "$MPLCONFIGDIR"
-PYTHONPATH=src python -m cfd_workflow.cli --docker \
+nl-cfd-solver --docker \
   "$PROMPT" \
   --output-dir "$TEST_DIR"
 

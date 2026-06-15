@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-DEFAULT_RESIDUAL_TOL = 1e-4
+DEFAULT_RESIDUAL_TOL = 1e-5
+REQUIRED_RESIDUAL_FIELDS = ("U", "p")
 
 _TIME_RE = re.compile(r"^\s*Time\s*=\s*(\d+)")
 _RESIDUAL_PATTERNS = {
@@ -23,6 +25,8 @@ class SimulationProgress:
     max_iterations: int = 0
     residuals: dict[str, float] = field(default_factory=dict)
     converged: bool = False
+    stopped_early: bool = False
+    residual_tol: float = DEFAULT_RESIDUAL_TOL
 
 
 def parse_residuals(log_text: str) -> dict[str, float]:
@@ -36,9 +40,41 @@ def parse_residuals(log_text: str) -> dict[str, float]:
 
 
 def is_converged(residuals: dict[str, float], tol: float = DEFAULT_RESIDUAL_TOL) -> bool:
-    if not residuals:
+    if not all(field in residuals for field in REQUIRED_RESIDUAL_FIELDS):
         return False
-    return all(value <= tol for value in residuals.values())
+    return all(residuals[field] <= tol for field in REQUIRED_RESIDUAL_FIELDS)
+
+
+def should_stop_on_convergence(
+    progress: SimulationProgress,
+    tol: float = DEFAULT_RESIDUAL_TOL,
+) -> bool:
+    """True when a full steady-state iteration meets the residual tolerance."""
+    return is_converged(progress.residuals, tol)
+
+
+def simplefoam_stream_handlers(
+    progress: SimulationProgress,
+    on_line: Callable[[str], None] | None,
+) -> tuple[Callable[[str], None], Callable[[], bool]]:
+    """Build log-line and early-stop callbacks for a simpleFoam run."""
+
+    def on_solver_line(line: str) -> None:
+        if update_progress_from_line(progress, line) and on_line:
+            on_line(format_progress_summary(progress))
+
+    def stop_when() -> bool:
+        if should_stop_on_convergence(progress, tol=progress.residual_tol):
+            progress.stopped_early = True
+            progress.converged = True
+            progress.status = "converged"
+            if on_line:
+                on_line("=== Convergence reached — stopping simpleFoam early ===")
+                on_line(format_progress_summary(progress))
+            return True
+        return False
+
+    return on_solver_line, stop_when
 
 
 def update_progress_from_line(progress: SimulationProgress, line: str) -> bool:
@@ -54,7 +90,7 @@ def update_progress_from_line(progress: SimulationProgress, line: str) -> bool:
         if match:
             progress.residuals[field_name] = float(match.group(1))
 
-    progress.converged = is_converged(progress.residuals)
+    progress.converged = is_converged(progress.residuals, tol=progress.residual_tol)
     return changed
 
 
@@ -67,7 +103,12 @@ def format_progress_summary(progress: SimulationProgress) -> str:
         residual_parts = "residuals pending"
 
     max_iter = progress.max_iterations or "?"
-    state = "converged" if progress.converged else progress.status or "running"
+    if progress.stopped_early and progress.converged:
+        state = "converged (early stop)"
+    elif progress.converged:
+        state = "converged"
+    else:
+        state = progress.status or "running"
     return (
         f"[{progress.step or 'solver'}] "
         f"iteration {progress.iteration}/{max_iter} — {residual_parts} — {state}"

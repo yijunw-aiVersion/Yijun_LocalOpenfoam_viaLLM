@@ -11,6 +11,7 @@ from crewai.flow.runtime import FlowState
 
 from cfd_workflow.models import CompleteParams, ParsedParams
 from cfd_workflow.openfoam.case_generator import DEFAULT_MAX_ITERATIONS
+from cfd_workflow.openfoam.monitor import DEFAULT_RESIDUAL_TOL
 
 
 class AgentTraceEntry(BaseModel):
@@ -33,6 +34,7 @@ class WorkflowState(FlowState):
     dry_run: bool = False
     use_docker: bool = False
     max_iterations: int = DEFAULT_MAX_ITERATIONS
+    residual_tol: float = DEFAULT_RESIDUAL_TOL
     on_line: Optional[Callable[[str], None]] = None
 
     run_id: str = ""

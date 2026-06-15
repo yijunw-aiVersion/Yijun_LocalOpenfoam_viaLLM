@@ -1,13 +1,12 @@
-import typer
 from pathlib import Path
 
+import typer
+
 from cfd_workflow.openfoam.case_generator import DEFAULT_MAX_ITERATIONS
+from cfd_workflow.openfoam.monitor import DEFAULT_RESIDUAL_TOL
 
-app = typer.Typer(help="Natural language driven CFD workflow builder")
 
-
-@app.command()
-def run(
+def main(
     prompt: str = typer.Argument(..., help="Natural language simulation description"),
     output_dir: Path = typer.Option(
         Path("../test"),
@@ -21,7 +20,14 @@ def run(
         min=1,
         help="simpleFoam outer iterations (controlDict endTime; default 200)",
     ),
-):
+    residual_tol: float = typer.Option(
+        DEFAULT_RESIDUAL_TOL,
+        "--residual-tol",
+        min=1e-12,
+        max=1.0,
+        help="Early-stop when U and p initial residuals fall below this (default 1e-5)",
+    ),
+) -> None:
     """Run a full CFD workflow from natural language input."""
     from cfd_workflow.workflow import run_workflow
 
@@ -34,12 +40,17 @@ def run(
         dry_run=dry_run,
         use_docker=docker,
         max_iterations=max_iterations,
+        residual_tol=residual_tol,
         on_line=echo_line,
     )
     typer.echo(f"Status: {report['status']}")
     typer.echo(f"Run directory: {report['run_dir']}")
+    if report.get("residual_tol") is not None:
+        typer.echo(f"Residual tolerance: {report['residual_tol']:.2e}")
     if report.get("converged") is not None:
         typer.echo(f"Converged: {report['converged']}")
+    if report.get("stopped_early"):
+        typer.echo("Stopped early: yes (steady-state tolerance reached)")
     if report.get("residuals"):
         res = ", ".join(f"{k}={v:.2e}" for k, v in report["residuals"].items())
         typer.echo(f"Final residuals: {res}")
@@ -55,5 +66,9 @@ def run(
         raise typer.Exit(code=1)
 
 
+def entrypoint() -> None:
+    typer.run(main)
+
+
 if __name__ == "__main__":
-    app()
+    entrypoint()

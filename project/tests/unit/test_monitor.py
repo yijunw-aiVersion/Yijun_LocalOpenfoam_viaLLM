@@ -8,8 +8,10 @@ from cfd_workflow.openfoam.monitor import (
     format_progress_summary,
     is_converged,
     parse_residuals,
+    should_stop_on_convergence,
     update_progress_from_line,
 )
+from cfd_workflow.openfoam.runner import run_command
 
 SAMPLE_LOG = """
 Time = 198
@@ -36,17 +38,59 @@ def test_is_converged():
     assert is_converged({"U": 1e-5, "p": 1e-5})
     assert not is_converged({"U": 1e-3, "p": 1e-5})
     assert not is_converged({})
+    assert not is_converged({"U": 1e-5})
     assert is_converged({"U": DEFAULT_RESIDUAL_TOL, "p": DEFAULT_RESIDUAL_TOL})
 
 
+def test_should_stop_on_convergence():
+    progress = SimulationProgress(
+        iteration=42,
+        residuals={"U": 1e-5, "p": 1e-5},
+    )
+    assert should_stop_on_convergence(progress) is True
+    progress.residuals = {"U": 1e-2, "p": 1e-5}
+    assert should_stop_on_convergence(progress) is False
+
+
+def test_run_command_stops_early(tmp_path):
+    script = tmp_path / "slow.sh"
+    script.write_text("#!/bin/bash\nfor i in 1 2 3; do echo line $i; sleep 0.05; done\n", encoding="utf-8")
+    script.chmod(0o755)
+    seen: list[str] = []
+
+    result = run_command(
+        "./slow.sh",
+        tmp_path,
+        "log.txt",
+        on_line=seen.append,
+        stop_when=lambda: len(seen) >= 1,
+    )
+    assert result.stopped_early is True
+    assert result.success is True
+    assert len(seen) == 1
+
+
 def test_update_progress_from_line():
-    progress = SimulationProgress(max_iterations=200, step="simpleFoam", status="running")
+    progress = SimulationProgress(
+        max_iterations=200,
+        step="simpleFoam",
+        status="running",
+        residual_tol=1e-4,
+    )
     for line in SAMPLE_LOG.splitlines():
         update_progress_from_line(progress, line)
 
     assert progress.iteration == 199
     assert progress.residuals["p"] == 8.8e-05
     assert progress.converged is True
+
+
+def test_update_progress_not_converged_at_default_tol():
+    progress = SimulationProgress(max_iterations=200, step="simpleFoam", status="running")
+    for line in SAMPLE_LOG.splitlines():
+        update_progress_from_line(progress, line)
+
+    assert progress.converged is False
 
 
 def test_format_progress_summary():

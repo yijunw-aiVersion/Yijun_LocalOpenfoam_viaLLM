@@ -41,7 +41,10 @@ class SimulationAgent(StageAgent):
             state.report.setdefault("issues", []).append(msg)
             return "blocked", msg
 
-        progress = SimulationProgress(max_iterations=state.max_iterations)
+        progress = SimulationProgress(
+            max_iterations=state.max_iterations,
+            residual_tol=state.residual_tol,
+        )
         try:
             if can_run_docker:
                 state.report["execution_mode"] = "docker"
@@ -49,6 +52,7 @@ class SimulationAgent(StageAgent):
                     state.case_dir,
                     on_line=state.on_line,
                     max_iterations=state.max_iterations,
+                    residual_tol=state.residual_tol,
                     progress=progress,
                 )
             else:
@@ -57,6 +61,7 @@ class SimulationAgent(StageAgent):
                     state.case_dir,
                     on_line=state.on_line,
                     max_iterations=state.max_iterations,
+                    residual_tol=state.residual_tol,
                     progress=progress,
                 )
 
@@ -67,6 +72,7 @@ class SimulationAgent(StageAgent):
             state.report["simulation_progress"] = asdict(progress)
             state.report["residuals"] = progress.residuals
             state.report["converged"] = progress.converged
+            state.report["stopped_early"] = progress.stopped_early
 
             if not all(r.success for r in step_results):
                 state.report["status"] = "simulation_failed"

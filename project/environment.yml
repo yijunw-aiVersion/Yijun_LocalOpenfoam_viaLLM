@@ -15,5 +15,6 @@ dependencies:
   # Visualization (Step 5); large download — install via conda-forge when possible
   - pyvista>=0.43
   - pip:
+      - -e .
       - crewai>=0.80
       - pyyaml>=6.0

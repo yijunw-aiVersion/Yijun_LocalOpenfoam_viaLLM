@@ -85,6 +85,8 @@ class ReportAgent(StageAgent):
             md_lines.extend(["", "## Simulation progress", ""])
             md_lines.append(f"- **Final iteration:** {sp.get('iteration', 0)}/{sp.get('max_iterations', '?')}")
             md_lines.append(f"- **Converged:** {report.get('converged', False)}")
+            if report.get("stopped_early"):
+                md_lines.append("- **Early stop:** yes (steady-state tolerance reached)")
             if report.get("residuals"):
                 res = ", ".join(f"{k}={v:.2e}" for k, v in report["residuals"].items())
                 md_lines.append(f"- **Final residuals:** {res}")

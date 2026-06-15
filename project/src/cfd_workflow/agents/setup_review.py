@@ -19,8 +19,13 @@ class SetupReviewAgent(StageAgent):
             state.report.setdefault("issues", []).append(msg)
             return "failed", msg
 
-        config = build_case_config(state.params, max_iterations=state.max_iterations)
+        config = build_case_config(
+            state.params,
+            max_iterations=state.max_iterations,
+            residual_tol=state.residual_tol,
+        )
         state.report["case_setup"] = config
+        state.report["residual_tol"] = state.residual_tol
 
         if state.on_line:
             for line in format_case_setup_lines(config):

@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Repo-root launcher for the NL CFD workflow CLI.
+# Prefer the conda-installed `nl-cfd-solver`; fall back to PYTHONPATH=src.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+INSTALLED="$(command -v nl-cfd-solver 2>/dev/null || true)"
+
+if [[ -n "$INSTALLED" && "$INSTALLED" != "$ROOT/nl-cfd-solver" ]]; then
+  exec "$INSTALLED" "$@"
+fi
+
+cd "$ROOT/project"
+export PYTHONPATH="src${PYTHONPATH:+:$PYTHONPATH}"
+exec python -m cfd_workflow.cli "$@"

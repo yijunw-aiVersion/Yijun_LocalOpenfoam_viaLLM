@@ -46,8 +46,8 @@ def compute_nu_from_params(params: CompleteParams) -> float:
 
 
 def compute_write_interval(max_iterations: int) -> int:
-    """OpenFOAM writeInterval — roughly four field dumps per run."""
-    return max(1, max_iterations // 4)
+    """OpenFOAM writeInterval — frequent enough for early-stop post-processing."""
+    return max(1, min(10, max_iterations // 4))
 
 
 def _template_context(params: CompleteParams, max_iterations: int = DEFAULT_MAX_ITERATIONS) -> dict:
@@ -90,10 +90,12 @@ def solver_settings(max_iterations: int = DEFAULT_MAX_ITERATIONS) -> dict[str, i
 def build_case_config(
     params: CompleteParams,
     max_iterations: int = DEFAULT_MAX_ITERATIONS,
+    residual_tol: float | None = None,
 ) -> dict:
     """Structured summary of the OpenFOAM case (problem_description §2)."""
     from cfd_workflow.openfoam.monitor import DEFAULT_RESIDUAL_TOL
 
+    tol = residual_tol if residual_tol is not None else DEFAULT_RESIDUAL_TOL
     ctx = _template_context(params, max_iterations=max_iterations)
     solver = solver_settings(max_iterations)
     return {
@@ -132,7 +134,7 @@ def build_case_config(
             "turbulence": "laminar",
             "max_iterations": solver["max_iterations"],
             "write_interval": solver["write_interval"],
-            "convergence_tolerance": DEFAULT_RESIDUAL_TOL,
+            "convergence_tolerance": tol,
         },
     }
 

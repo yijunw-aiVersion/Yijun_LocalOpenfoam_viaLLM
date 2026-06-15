@@ -25,7 +25,8 @@ dev = [
 ]
 
 [project.scripts]
-cfd-workflow = "cfd_workflow.cli:app"
+nl-cfd-solver = "cfd_workflow.cli:entrypoint"
+cfd-workflow = "cfd_workflow.cli:entrypoint"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
