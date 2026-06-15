@@ -19,6 +19,21 @@ from cfd_workflow.agents import (
 from cfd_workflow.openfoam.case_generator import DEFAULT_MAX_ITERATIONS
 
 
+def _configure_crewai_runtime() -> None:
+    """Disable interactive CrewAI tracing prompts.
+
+    CrewAI Flow runs sync steps in a thread pool. On macOS, its first-run
+    trace prompt calls input() from a background thread and can crash with
+    NSInternalInconsistencyException. Suppress those prompts for CLI runs.
+    """
+    try:
+        from crewai.events.listeners.tracing.utils import set_suppress_tracing_messages
+
+        set_suppress_tracing_messages(True)
+    except ImportError:
+        pass
+
+
 class CFDWorkflowFlow(Flow[WorkflowState]):
     """Sequential agent pipeline: parse → physics → case → simulate → visualize → report."""
 
@@ -92,7 +107,12 @@ def run_workflow_flow(
         max_iterations=max_iterations,
         on_line=on_line,
     )
-    flow = CFDWorkflowFlow(initial_state=state, suppress_flow_events=True)
+    _configure_crewai_runtime()
+    flow = CFDWorkflowFlow(
+        initial_state=state,
+        suppress_flow_events=True,
+        tracing=False,
+    )
     flow.kickoff()
     report = dict(flow.state.report)
     report["agent_trace"] = [entry.model_dump() for entry in flow.state.agent_trace]
