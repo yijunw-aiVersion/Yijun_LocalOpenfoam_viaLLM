@@ -53,7 +53,9 @@ ls -td Yijun_LocalOpenfoam_viaLLM/test/run_* | head -1
 
 ## One-time setup (first time only)
 
-Follow [`project/README.md`](project/README.md) for full details. Short version:
+Follow [`project/README.md`](project/README.md) for full details.
+
+### macOS (validated)
 
 ```bash
 # 1. Conda environment
@@ -61,7 +63,7 @@ cd Yijun_LocalOpenfoam_viaLLM/project
 conda env create -f environment.yml
 conda activate cfd-agent-test
 
-# 2. Docker tools (macOS — no local OpenFOAM install needed)
+# 2. Docker tools (no local OpenFOAM install needed)
 conda install -n cfd-agent-test -c conda-forge colima docker-cli -y
 brew install qemu
 
@@ -78,14 +80,48 @@ Verify:
 ```bash
 conda activate cfd-agent-test
 docker ps
-python -m cfd_workflow.cli --help   # from project/ with PYTHONPATH=src
+cd Yijun_LocalOpenfoam_viaLLM/project
+PYTHONPATH=src python -m cfd_workflow.cli --help
 ```
+
+### Windows (not validated)
+
+> **Note:** The maintainer develops on macOS only. The steps below mirror the macOS flow using **Docker Desktop** instead of Colima; they have **not been tested on Windows**.
+
+```powershell
+# 1. Conda environment (Anaconda Prompt or PowerShell after `conda init`)
+cd Yijun_LocalOpenfoam_viaLLM\project
+conda env create -f environment.yml
+conda activate cfd-agent-test
+
+# 2. Docker Desktop for Windows (replaces Colima on macOS)
+#    https://docs.docker.com/desktop/setup/install/windows-install/
+#    Use the WSL 2 backend when prompted; start Docker Desktop and wait until it is running.
+
+# 3. Optional: docker CLI via conda if `docker` is not on PATH
+conda install -c conda-forge docker-cli -y
+
+# 4. Pull OpenFOAM image (first run only; ~2 GB)
+docker pull opencfd/openfoam-default:2412
+```
+
+Verify:
+
+```powershell
+conda activate cfd-agent-test
+docker ps
+cd Yijun_LocalOpenfoam_viaLLM\project
+$env:PYTHONPATH = "src"
+python -m cfd_workflow.cli --help
+```
+
+On Windows you do **not** need `DOCKER_HOST`. Helper scripts under `project/scripts/` are bash-only — use PowerShell commands below or Git Bash / WSL.
 
 ---
 
 ## Run end-to-end (recommended)
 
-### Option A — helper script (easiest)
+### Option A — helper script (macOS / bash only)
 
 From anywhere:
 
@@ -95,13 +131,15 @@ bash Yijun_LocalOpenfoam_viaLLM/project/scripts/run_docker_simulation.sh \
   "我想模拟一个直径5厘米的圆柱，流速2m/s，雷诺数200。"
 ```
 
-The script starts Colima if needed, pulls the Docker image, runs the workflow, and prints where output went.
+The script starts Colima if needed, pulls the Docker image, runs the workflow, and prints where output went. On Windows, use Option B (PowerShell) instead.
 
 ### Option B — manual commands (full control)
 
+**macOS / Linux / Git Bash:**
+
 ```bash
 conda activate cfd-agent-test
-export DOCKER_HOST=unix://$HOME/.colima/default/docker.sock
+export DOCKER_HOST=unix://$HOME/.colima/default/docker.sock   # macOS Colima only
 
 cd Yijun_LocalOpenfoam_viaLLM/project
 export MPLCONFIGDIR=../test/.matplotlib
@@ -110,6 +148,19 @@ mkdir -p "$MPLCONFIGDIR"
 PYTHONPATH=src python -m cfd_workflow.cli --docker \
   "圆柱直径0.1米，雷诺数100，来流速度1米每秒。" \
   --output-dir ../test
+```
+
+**Windows (PowerShell):**
+
+```powershell
+conda activate cfd-agent-test
+cd Yijun_LocalOpenfoam_viaLLM\project
+$env:MPLCONFIGDIR = "..\test\.matplotlib"
+New-Item -ItemType Directory -Force -Path $env:MPLCONFIGDIR | Out-Null
+$env:PYTHONPATH = "src"
+python -m cfd_workflow.cli --docker `
+  "圆柱直径0.1米，雷诺数100，来流速度1米每秒。" `
+  --output-dir ..\test
 ```
 
 Change the quoted string to any supported prompt. Change `--output-dir` if you want results elsewhere.
@@ -138,7 +189,7 @@ PYTHONPATH=src python -m cfd_workflow.cli [OPTIONS] "YOUR PROMPT HERE"
 | Option | Default | Purpose |
 |--------|---------|---------|
 | `--output-dir PATH` | `../test` | Root folder for timestamped `run_*` directories |
-| `--docker` | off | Run OpenFOAM in Docker (use this on macOS without local OpenFOAM) |
+| `--docker` | off | Run OpenFOAM in Docker (use this on macOS/Windows without local OpenFOAM) |
 | `--dry-run` | off | Parse + generate OpenFOAM case only; skip solver |
 | `--max-iterations N` | `200` | `simpleFoam` outer iterations (`controlDict` `endTime`); `writeInterval` auto-set to `N/4` |
 
@@ -200,6 +251,8 @@ PYTHONPATH=src python -m cfd_workflow.cli --dry-run "YOUR PROMPT" --output-dir .
 
 If you already have a generated case and only want to re-solve in Docker:
 
+**macOS / bash:**
+
 ```bash
 conda activate cfd-agent-test
 export DOCKER_HOST=unix://$HOME/.colima/default/docker.sock
@@ -207,6 +260,8 @@ export DOCKER_HOST=unix://$HOME/.colima/default/docker.sock
 bash Yijun_LocalOpenfoam_viaLLM/project/scripts/run_openfoam_docker.sh \
   Yijun_LocalOpenfoam_viaLLM/test/run_20260612_231827/case
 ```
+
+**Windows (PowerShell):** run the same `docker run` logic manually or use Git Bash / WSL with the script above. Ensure Docker Desktop is running; no `DOCKER_HOST` export needed.
 
 Re-generate figures only (after VTK exists):
 
@@ -240,8 +295,9 @@ pytest tests/unit -v
 | Symptom | Fix |
 |---------|-----|
 | `OpenFOAM not installed` / `blocked` | Add `--docker` or install OpenFOAM locally |
-| `Docker CLI not found` | `conda install -c conda-forge colima docker-cli` |
+| `Docker CLI not found` | macOS: `conda install -c conda-forge colima docker-cli`; Windows: install [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/) or `conda install -c conda-forge docker-cli` |
 | Colima / Docker errors on macOS | Use QEMU: `colima start --vm-type qemu --mount-type 9p` and install `brew install qemu` |
+| Docker errors on Windows (not validated) | Ensure Docker Desktop is running with WSL 2 backend; share the project drive in Docker Desktop **Settings → Resources → File sharing** if volume mounts fail |
 | `bash: /opt/openfoam2412/etc/bashrc` in logs | Harmless Docker image warning; ignore if steps succeed |
 | `simulation_failed` | Open the log file named in the CLI **Issue:** line (e.g. `case/log.blockMesh`) |
 | `postprocess_failed` | Check `case/VTK/` exists; see `case/log.foamToVTK` |
