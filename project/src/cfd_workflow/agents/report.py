@@ -53,12 +53,41 @@ class ReportAgent(StageAgent):
             )
         if report.get("execution_mode"):
             md_lines.append(f"- **Execution:** {report['execution_mode']}")
-        if report.get("solver"):
-            s = report["solver"]
+        if report.get("case_setup"):
+            cs = report["case_setup"]
+            md_lines.extend(["", "## Case setup", ""])
+            geom = cs["geometry"]
+            domain = geom["domain_m"]
             md_lines.append(
-                f"- **Solver:** max_iterations={s['max_iterations']}, "
-                f"write_interval={s['write_interval']}"
+                f"- **Geometry:** {geom['type']}, D={geom['diameter_m']} m, "
+                f"x∈[{domain['x_min']}, {domain['x_max']}] m"
             )
+            mesh = cs["mesh"]
+            cells = mesh["background_cells"]
+            md_lines.append(
+                f"- **Mesh:** {mesh['background']} ({cells['nx']}×{cells['ny']}) + {mesh['refinement']}"
+            )
+            bc = cs["boundary_conditions"]
+            md_lines.append(
+                f"- **BCs:** inlet U={bc['inlet']['U']}, outlet p={bc['outlet']['p']}"
+            )
+            fluid = cs["fluid"]
+            md_lines.append(
+                f"- **Fluid:** {fluid['name']}, nu={fluid['kinematic_viscosity_m2s']:.6g} m²/s"
+            )
+            solver = cs["solver"]
+            md_lines.append(
+                f"- **Solver:** {solver['name']} ({solver['turbulence']}), "
+                f"max_iterations={solver['max_iterations']}"
+            )
+        if report.get("simulation_progress"):
+            sp = report["simulation_progress"]
+            md_lines.extend(["", "## Simulation progress", ""])
+            md_lines.append(f"- **Final iteration:** {sp.get('iteration', 0)}/{sp.get('max_iterations', '?')}")
+            md_lines.append(f"- **Converged:** {report.get('converged', False)}")
+            if report.get("residuals"):
+                res = ", ".join(f"{k}={v:.2e}" for k, v in report["residuals"].items())
+                md_lines.append(f"- **Final residuals:** {res}")
         if report.get("issues"):
             md_lines.extend(["", "## Issues", ""])
             md_lines.extend(f"- {issue}" for issue in report["issues"])

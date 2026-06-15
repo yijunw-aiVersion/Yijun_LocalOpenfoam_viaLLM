@@ -22,14 +22,15 @@ Solver pipeline: `blockMesh` → `snappyHexMesh` → `simpleFoam` → `foamToVTK
 
 ## Agent architecture (CrewAI)
 
-The pipeline uses **six stage agents** orchestrated by a **CrewAI Flow** (deterministic — no LLM API key required):
+The pipeline uses **seven stage agents** orchestrated by a **CrewAI Flow** (deterministic — no LLM API key required):
 
 | Agent | Module | Responsibility |
 |-------|--------|----------------|
 | `parser_agent` | `agents/parser.py` | NL parsing |
 | `physics_agent` | `agents/physics.py` | Parameter completion |
 | `case_agent` | `agents/case.py` | OpenFOAM case generation |
-| `simulation_agent` | `agents/simulation.py` | blockMesh → foamToVTK |
+| `setup_review_agent` | `agents/setup_review.py` | Case config summary (geometry, mesh, BCs, solver) |
+| `simulation_agent` | `agents/simulation.py` | blockMesh → foamToVTK + live progress/residuals |
 | `visualization_agent` | `agents/visualization.py` | PNG figures |
 | `report_agent` | `agents/report.py` | JSON/MD reports + agent trace |
 

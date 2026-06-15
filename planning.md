@@ -59,11 +59,12 @@ D  = 2 * R
                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │  Step 3: Case Generator     → OpenFOAM case directory (templates)│
+│  Step 3b: Setup Review      → case config summary for user     │
 └───────────────────────────────┬─────────────────────────────────┘
                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │  Step 4: Simulation Runner  → blockMesh → solver → postProcess │
-│          Progress Monitor   → parse log, residuals, time steps   │
+│          Progress Monitor   → stream log, residuals, convergence│
 └───────────────────────────────┬─────────────────────────────────┘
                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
@@ -260,32 +261,50 @@ pip install -e ".[dev]"
 
 ### Step 4 — 仿真执行与进度监控 (`openfoam/runner.py`, `monitor.py`)
 
+**状态**：✅ 已实现（2026-06-15）
+
 **目标**： subprocess 调用 OpenFOAM；实时解析日志显示进度与收敛。
+
+**需实现函数**：
+
+| 函数 | 说明 | 状态 |
+|------|------|------|
+| `find_openfoam_env()` | 检测 OpenFOAM 环境变量/路径 | ✅ `runner.py` |
+| `run_command(cmd, cwd, on_line)` | 流式执行并回调每一行日志 | ✅ `runner.py` |
+| `run_simulation(case_dir, …)` | blockMesh → snappyHexMesh → simpleFoam → foamToVTK | ✅ `runner.py` |
+| `parse_residuals(log_text)` | 提取最后若干步残差 | ✅ `monitor.py` |
+| `is_converged(residuals, tol)` | 判断是否收敛 | ✅ `monitor.py` |
+| `update_progress_from_line(…)` | 从日志行更新迭代/残差 | ✅ `monitor.py` |
+| `format_progress_summary(…)` | CLI 单行进度输出 | ✅ `monitor.py` |
+| `SimulationProgress` | dataclass：当前步、迭代、残差、状态 | ✅ `monitor.py` |
+
+**Docker 路径**：`docker_runner.py` 改为逐步骤启动容器并流式输出（不再批量脚本），simpleFoam 阶段同样解析进度。
+
+**对应 Agent**：`simulation_agent` 写入 `simulation_progress`、`converged`、`residuals` 到 report。
+
+---
+
+### Step 3b — 算例配置审查 (`agents/setup_review.py`, `build_case_config`)
+
+**状态**：✅ 已实现（2026-06-15）— 对应 `problem_description.md` §2
+
+**目标**：在求解前向用户展示完整算例配置摘要。
+
+**流程位置**：`case_agent` → **`setup_review_agent`** → `simulation_agent`
+
+**输出**：
+- CLI：`=== OpenFOAM case configuration ===` 块（几何、网格、边界、流体、求解器）
+- Report：`case_setup` JSON 字段 + Markdown `## Case setup` 节
+- Dry-run：审查完成后设 `dry_run_complete`，跳过仿真
 
 **需实现函数**：
 
 | 函数 | 说明 |
 |------|------|
-| `find_openfoam_env()` | 检测 OpenFOAM 环境变量/路径 |
-| `run_command(cmd, cwd, on_line)` | 流式执行并回调每一行日志 |
-| `run_simulation(case_dir, solver)` | blockMesh → checkMesh → solver |
-| `parse_residuals(log_text)` | 提取最后若干步残差 |
-| `is_converged(residuals, tol)` | 判断是否收敛 |
-| `SimulationProgress` | dataclass：当前步、残差、状态 |
+| `build_case_config(params, max_iterations)` | 结构化算例摘要（几何/网格/BC/求解器） |
+| `format_case_setup_lines(config)` | 人类可读 CLI 行列表 |
 
-**需安装库**：
-
-| 库 | 用途 |
-|----|------|
-| `subprocess`（标准库） | 执行命令 |
-| `re`（标准库） | 解析 log |
-| `rich` | CLI 进度/表格美化（可选） |
-
-**测试策略**：
-- **单元测试**：用样例 `log` 文件测试 `parse_residuals` / `is_converged`
-- **集成测试**：标记 `@pytest.mark.openfoam`，真实跑一个小网格 case
-
-**验收**：单元测试 100% 通过；集成测试在本地 OpenFOAM 下完整跑通。
+**验收**：dry-run 与 full run 均在 CLI 和 `run_report.md` 中可见算例配置摘要。
 
 ---
 
@@ -351,10 +370,11 @@ python -m cfd_workflow.cli run --dry-run  # 只解析+生成算例，不求解
 **端到端检查清单**（对照 `problem_description.md`）：
 
 - [ ] 4 条示例 NL 均能正确解析
-- [ ] 自动生成 OpenFOAM 算例（blockMesh + 边界条件 + 求解器）
-- [ ] 自动执行仿真并显示进度
-- [ ] 检测收敛（或达到 maxIter）
-- [ ] 输出流速场与表面压力可视化
+- [x] 自动生成 OpenFOAM 算例（blockMesh + snappyHexMesh + 边界条件 + simpleFoam）
+- [x] 算例配置摘要展示（setup_review_agent / case_setup）
+- [x] 自动执行仿真并流式显示进度（迭代 + 残差）
+- [x] 检测收敛（或达到 maxIter）
+- [x] 输出流速场与表面压力可视化
 - [ ] README 含 OpenFOAM 版本与运行说明
 
 ---

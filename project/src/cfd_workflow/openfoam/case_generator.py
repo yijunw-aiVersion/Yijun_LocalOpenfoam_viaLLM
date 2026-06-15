@@ -87,6 +87,56 @@ def solver_settings(max_iterations: int = DEFAULT_MAX_ITERATIONS) -> dict[str, i
     }
 
 
+def build_case_config(
+    params: CompleteParams,
+    max_iterations: int = DEFAULT_MAX_ITERATIONS,
+) -> dict:
+    """Structured summary of the OpenFOAM case (problem_description §2)."""
+    from cfd_workflow.openfoam.monitor import DEFAULT_RESIDUAL_TOL
+
+    ctx = _template_context(params, max_iterations=max_iterations)
+    solver = solver_settings(max_iterations)
+    return {
+        "geometry": {
+            "type": "2D cylinder (empty front/back)",
+            "diameter_m": params.diameter_m,
+            "radius_m": ctx["radius"],
+            "domain_m": {
+                "x_min": ctx["x_min"],
+                "x_max": ctx["x_max"],
+                "y_min": ctx["y_min"],
+                "y_max": ctx["y_max"],
+                "z_half": ctx["z_half"],
+            },
+        },
+        "mesh": {
+            "background": "blockMesh",
+            "refinement": "snappyHexMesh",
+            "background_cells": {"nx": ctx["nx"], "ny": ctx["ny"]},
+            "surface": "constant/triSurface/cylinder.stl",
+        },
+        "boundary_conditions": {
+            "inlet": {"U": f"({params.velocity_ms} 0 0) m/s"},
+            "outlet": {"p": "fixedValue 0"},
+            "cylinder": {"U": "noSlip"},
+            "top_bottom": {"U": "slip"},
+        },
+        "fluid": {
+            "name": params.fluid.value,
+            "density_kgm3": params.density_kgm3,
+            "kinematic_viscosity_m2s": ctx["nu"],
+            "reynolds": params.reynolds,
+        },
+        "solver": {
+            "name": "simpleFoam",
+            "turbulence": "laminar",
+            "max_iterations": solver["max_iterations"],
+            "write_interval": solver["write_interval"],
+            "convergence_tolerance": DEFAULT_RESIDUAL_TOL,
+        },
+    }
+
+
 def write_cylinder_stl(output_dir: Path, radius: float, height: float = 0.02) -> Path:
     """Write cylinder STL for snappyHexMesh."""
     import pyvista as pv

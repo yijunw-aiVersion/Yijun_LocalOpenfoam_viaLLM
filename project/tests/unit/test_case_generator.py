@@ -9,6 +9,7 @@ import pytest
 from cfd_workflow.models import CompleteParams, FluidType
 from cfd_workflow.openfoam.case_generator import (
     DEFAULT_MAX_ITERATIONS,
+    build_case_config,
     compute_write_interval,
     render_case,
     solver_settings,
@@ -33,6 +34,23 @@ def test_solver_settings_default():
         "max_iterations": DEFAULT_MAX_ITERATIONS,
         "write_interval": 50,
     }
+
+
+def test_build_case_config():
+    params = CompleteParams(
+        diameter_m=0.1,
+        reynolds=100.0,
+        velocity_ms=1.0,
+        fluid=FluidType.AIR,
+        kinematic_viscosity_m2s=0.001,
+        density_kgm3=1.225,
+    )
+    config = build_case_config(params, max_iterations=200)
+    assert config["geometry"]["diameter_m"] == 0.1
+    assert config["solver"]["name"] == "simpleFoam"
+    assert config["solver"]["max_iterations"] == 200
+    assert config["mesh"]["background"] == "blockMesh"
+    assert "1.0 0 0" in config["boundary_conditions"]["inlet"]["U"]
 
 
 def test_render_case_respects_max_iterations(tmp_path: Path):

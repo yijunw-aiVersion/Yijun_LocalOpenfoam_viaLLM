@@ -12,6 +12,7 @@ from cfd_workflow.agents import (
     ParserAgent,
     PhysicsAgent,
     ReportAgent,
+    SetupReviewAgent,
     SimulationAgent,
     VisualizationAgent,
     WorkflowState,
@@ -35,7 +36,7 @@ def _configure_crewai_runtime() -> None:
 
 
 class CFDWorkflowFlow(Flow[WorkflowState]):
-    """Sequential agent pipeline: parse → physics → case → simulate → visualize → report."""
+    """Sequential agent pipeline: parse → physics → case → review → simulate → visualize → report."""
 
     @start()
     def initialize(self) -> None:
@@ -74,6 +75,12 @@ class CFDWorkflowFlow(Flow[WorkflowState]):
         CaseAgent().execute(self.state)
 
     @listen(case_agent_step)
+    def setup_review_agent_step(self) -> None:
+        if self.state.halted():
+            return
+        SetupReviewAgent().execute(self.state)
+
+    @listen(setup_review_agent_step)
     def simulation_agent_step(self) -> None:
         if self.state.halted():
             return

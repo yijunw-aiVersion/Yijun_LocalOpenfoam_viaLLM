@@ -50,20 +50,34 @@ def render_openfoam_case_tool(params_json: str, case_dir: str) -> str:
 @tool("run_openfoam_local")
 def run_openfoam_local_tool(case_dir: str) -> str:
     """Run OpenFOAM solver pipeline locally."""
-    results = run_simulation(Path(case_dir))
-    payload = [
-        {"command": r.command, "success": r.success, "log": str(r.log_file)} for r in results
-    ]
+    results, progress = run_simulation(Path(case_dir))
+    payload = {
+        "steps": [
+            {"command": r.command, "success": r.success, "log": str(r.log_file)} for r in results
+        ],
+        "progress": {
+            "iteration": progress.iteration,
+            "converged": progress.converged,
+            "residuals": progress.residuals,
+        },
+    }
     return json.dumps(payload, ensure_ascii=False)
 
 
 @tool("run_openfoam_docker")
 def run_openfoam_docker_tool(case_dir: str) -> str:
     """Run OpenFOAM solver pipeline inside Docker."""
-    results = run_simulation_docker(Path(case_dir))
-    payload = [
-        {"command": r.command, "success": r.success, "log": str(r.log_file)} for r in results
-    ]
+    results, progress = run_simulation_docker(Path(case_dir))
+    payload = {
+        "steps": [
+            {"command": r.command, "success": r.success, "log": str(r.log_file)} for r in results
+        ],
+        "progress": {
+            "iteration": progress.iteration,
+            "converged": progress.converged,
+            "residuals": progress.residuals,
+        },
+    }
     return json.dumps(payload, ensure_ascii=False)
 
 

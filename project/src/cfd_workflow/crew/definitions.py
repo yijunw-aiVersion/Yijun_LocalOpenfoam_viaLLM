@@ -29,6 +29,7 @@ AGENT_TOOLS: ClassVar[dict[str, list[str]]] = {
     "parser_agent": ["parse_nl_prompt"],
     "physics_agent": ["complete_physics_parameters"],
     "case_agent": ["render_openfoam_case"],
+    "setup_review_agent": [],
     "simulation_agent": ["run_openfoam_local", "run_openfoam_docker"],
     "visualization_agent": ["generate_cfd_figures"],
     "report_agent": [],

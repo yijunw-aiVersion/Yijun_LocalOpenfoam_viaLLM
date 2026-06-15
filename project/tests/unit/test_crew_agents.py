@@ -17,6 +17,7 @@ def test_stage_agents_registered():
         "parser_agent",
         "physics_agent",
         "case_agent",
+        "setup_review_agent",
         "simulation_agent",
         "visualization_agent",
         "report_agent",
@@ -49,5 +50,11 @@ def test_workflow_dry_run_via_flow(tmp_path: Path, prompt: str, expected_status:
     assert report["status"] == expected_status
     assert (tmp_path / report["run_id"] / "case" / "system" / "blockMeshDict").exists()
     trace_agents = [entry["agent"] for entry in report["agent_trace"]]
-    assert trace_agents[:3] == ["parser_agent", "physics_agent", "case_agent"]
+    assert trace_agents[:4] == [
+        "parser_agent",
+        "physics_agent",
+        "case_agent",
+        "setup_review_agent",
+    ]
     assert trace_agents[-1] == "report_agent"
+    assert report.get("case_setup") is not None

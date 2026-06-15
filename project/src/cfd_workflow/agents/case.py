@@ -32,10 +32,6 @@ class CaseAgent(StageAgent):
             return "failed", msg
 
         state.report["status"] = "case_generated"
-        if state.dry_run:
-            state.report["status"] = "dry_run_complete"
-            return "success", "Case generated (dry run — solver skipped)"
-
         return "success", (
             f"OpenFOAM case written to {case_dir} "
             f"(max_iterations={state.max_iterations})"

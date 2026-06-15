@@ -8,6 +8,14 @@ import subprocess
 from pathlib import Path
 from typing import Callable, Optional
 
+from cfd_workflow.openfoam.case_generator import DEFAULT_MAX_ITERATIONS
+from cfd_workflow.openfoam.monitor import (
+    SimulationProgress,
+    format_progress_summary,
+    is_converged,
+    parse_residuals,
+    update_progress_from_line,
+)
 from cfd_workflow.openfoam.runner import StepResult
 
 DEFAULT_IMAGE = "opencfd/openfoam-default:2412"
@@ -23,18 +31,6 @@ def _docker_env() -> dict[str, str]:
     if colima_sock.exists() and not env.get("DOCKER_HOST"):
         env["DOCKER_HOST"] = f"unix://{colima_sock}"
     return env
-
-
-def _docker_shell_script(steps: list[tuple[str, str]]) -> str:
-    """Build bash script for OpenFOAM commands inside the container."""
-    lines = [
-        "set -e",
-        "cd /case",
-    ]
-    for cmd, log_name in steps:
-        lines.append(f'echo "=== {cmd} ==="')
-        lines.append(f"{cmd} > {log_name} 2>&1")
-    return "\n".join(lines)
 
 
 def _log_success(log_file: Path) -> bool:
@@ -57,35 +53,15 @@ def ensure_image(image: str = DEFAULT_IMAGE, on_line: Optional[Callable[[str], N
         raise RuntimeError(f"docker pull failed:\n{proc.stdout}\n{proc.stderr}")
 
 
-def run_simulation_docker(
+def _run_docker_step(
     case_dir: Path,
-    image: str = DEFAULT_IMAGE,
+    image: str,
+    cmd: str,
+    log_name: str,
     on_line: Optional[Callable[[str], None]] = None,
-    pull: bool = True,
-) -> list[StepResult]:
-    """Run blockMesh → snappyHexMesh → simpleFoam → foamToVTK in one Docker container."""
-    case_dir = Path(case_dir).resolve()
-    if not docker_available():
-        raise RuntimeError(
-            "Docker CLI not found. Install via: "
-            "conda install -n cfd-agent-test -c conda-forge colima docker-cli && colima start"
-        )
-
-    if pull:
-        ensure_image(image, on_line=on_line)
-
-    steps = [
-        ("blockMesh", "log.blockMesh"),
-        ("snappyHexMesh -overwrite", "log.snappyHexMesh"),
-        ("simpleFoam", "log.simpleFoam"),
-        ("foamToVTK -latestTime", "log.foamToVTK"),
-    ]
-
-    if on_line:
-        on_line("=== Docker: starting OpenFOAM container ===")
-
-    inner = _docker_shell_script(steps)
-
+    on_solver_line: Optional[Callable[[str], None]] = None,
+) -> StepResult:
+    inner = f"cd /case && {cmd}"
     docker_cmd = [
         "docker",
         "run",
@@ -101,32 +77,103 @@ def run_simulation_docker(
         "-c",
         inner,
     ]
+    log_file = case_dir / log_name
+    with log_file.open("w", encoding="utf-8") as log:
+        proc = subprocess.Popen(
+            docker_cmd,
+            env=_docker_env(),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        assert proc.stdout is not None
+        for line in proc.stdout:
+            log.write(line)
+            stripped = line.rstrip()
+            if on_line:
+                on_line(stripped)
+            if on_solver_line:
+                on_solver_line(stripped)
+        proc.wait()
 
-    combined_log = case_dir / "log.docker"
-    proc = subprocess.run(
-        docker_cmd,
-        env=_docker_env(),
-        capture_output=True,
-        text=True,
+    success = proc.returncode == 0 and _log_success(log_file)
+    return StepResult(
+        command=f"docker: {cmd}",
+        returncode=0 if success else 1,
+        log_file=log_file,
+        success=success,
     )
-    combined_log.write_text(proc.stdout + proc.stderr, encoding="utf-8")
+
+
+def run_simulation_docker(
+    case_dir: Path,
+    image: str = DEFAULT_IMAGE,
+    on_line: Optional[Callable[[str], None]] = None,
+    pull: bool = True,
+    max_iterations: int = DEFAULT_MAX_ITERATIONS,
+    progress: Optional[SimulationProgress] = None,
+) -> tuple[list[StepResult], SimulationProgress]:
+    """Run blockMesh → snappyHexMesh → simpleFoam → foamToVTK, one Docker step at a time."""
+    case_dir = Path(case_dir).resolve()
+    if not docker_available():
+        raise RuntimeError(
+            "Docker CLI not found. Install via: "
+            "conda install -n cfd-agent-test -c conda-forge colima docker-cli && colima start"
+        )
+
+    if pull:
+        ensure_image(image, on_line=on_line)
+
+    sim_progress = progress or SimulationProgress(max_iterations=max_iterations)
+    steps = [
+        ("blockMesh", "log.blockMesh"),
+        ("snappyHexMesh -overwrite", "log.snappyHexMesh"),
+        ("simpleFoam", "log.simpleFoam"),
+        ("foamToVTK -latestTime", "log.foamToVTK"),
+    ]
+
     if on_line:
-        for line in (proc.stdout + proc.stderr).splitlines():
-            on_line(line)
+        on_line("=== Docker: starting OpenFOAM container ===")
 
     results: list[StepResult] = []
     for cmd, log_name in steps:
-        log_file = case_dir / log_name
-        step_ok = _log_success(log_file)
-        results.append(
-            StepResult(
-                command=f"docker: {cmd}",
-                returncode=0 if step_ok else 1,
-                log_file=log_file,
-                success=step_ok,
-            )
-        )
-        if not step_ok:
-            break
+        sim_progress.step = cmd.split()[0]
+        sim_progress.status = "running"
+        if on_line:
+            on_line(f"=== {cmd} ===")
 
-    return results
+        solver_line_cb: Optional[Callable[[str], None]] = None
+        if cmd == "simpleFoam":
+
+            def _on_solver_line(line: str, *, _progress: SimulationProgress = sim_progress) -> None:
+                if update_progress_from_line(_progress, line) and on_line:
+                    on_line(format_progress_summary(_progress))
+
+            solver_line_cb = _on_solver_line
+
+        result = _run_docker_step(
+            case_dir,
+            image,
+            cmd,
+            log_name,
+            on_line=on_line if cmd != "simpleFoam" else None,
+            on_solver_line=solver_line_cb,
+        )
+        results.append(result)
+        if not result.success:
+            sim_progress.status = "failed"
+            break
+    else:
+        sim_progress.status = "completed"
+
+    log_path = case_dir / "log.simpleFoam"
+    if log_path.exists():
+        sim_progress.residuals = parse_residuals(
+            log_path.read_text(encoding="utf-8", errors="replace")
+        )
+        sim_progress.converged = is_converged(sim_progress.residuals)
+
+    if on_line and sim_progress.step == "simpleFoam":
+        on_line(format_progress_summary(sim_progress))
+
+    return results, sim_progress
