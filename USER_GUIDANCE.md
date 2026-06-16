@@ -8,7 +8,69 @@ This guide explains how to run the **2D and 3D** cylinder-flow workflow from scr
 
 ---
 
-## Quick answer: where are my results?
+## How to use this guide
+
+| Your situation | Start here |
+|----------------|------------|
+| **New machine** — nothing installed yet | [First-time installation](#first-time-installation) → then run a command from [Quick reference](#quick-reference-returning-users) |
+| **Already set up** — new terminal session | [Quick reference](#quick-reference-returning-users) only |
+| **Where did my run go?** | [Where are my results?](#where-are-my-results) |
+| **3D, CLI flags, high Re** | Sections further down |
+
+Do **not** run both “First-time installation” and the quick-reference session block as if they were the same step — installation is **once per machine**; the quick reference is **each time you open a terminal**.
+
+---
+
+## Quick reference (returning users)
+
+Use this when conda, Docker/Colima, and `nl-cfd-solver` are already installed.
+
+**Each session — macOS (new terminal):**
+
+```bash
+conda activate cfd-agent-test
+export DOCKER_HOST=unix://$HOME/.colima/default/docker.sock   # skip on Windows
+export MPLCONFIGDIR=../test/.matplotlib
+cd Yijun_LocalOpenfoam_viaLLM/project
+```
+
+**2D run (laminar, Re ~100–200):**
+
+```bash
+nl-cfd-solver --docker \
+  "圆柱直径0.1米，雷诺数100，来流速度1米每秒。" \
+  --output-dir ../test
+```
+
+**3D run (coarse mesh, short span — good first test):**
+
+```bash
+nl-cfd-solver --docker \
+  "三维，圆柱直径0.1米，雷诺数100，来流速度1米每秒。" \
+  --span 0.5 --max-iterations 200 \
+  --output-dir ../test/3d_coarse_run
+```
+
+**Dry-run (parse + case only, no solver):**
+
+```bash
+nl-cfd-solver --dry-run \
+  "圆柱直径0.1米，雷诺数100，来流速度1米每秒。" \
+  --output-dir ../test
+```
+
+**Find latest results:**
+
+```bash
+ls -td ../test/run_* ../test/*/run_* 2>/dev/null | head -1
+open "$(ls -td ../test/run_*/figures/velocity_field.png 2>/dev/null | head -1)"
+```
+
+> **Laminar-only prototype:** Every run uses **`simpleFoam` with `simulationType laminar`**. Reynolds number sets fluid properties (ν, U) but **does not** switch to a turbulence model. Use **Re roughly 40–1000** (the interview examples are Re 100–200). For **Re ≳ 1000**, results may not match turbulent cylinder physics; for **Re > 10⁶**, validation rejects the run. See [Solver and Reynolds number](#solver-and-reynolds-number) below.
+
+---
+
+## Where are my results?
 
 Every run creates a **new timestamped folder** under the output directory (default: `test/`):
 
@@ -54,9 +116,11 @@ ls -td Yijun_LocalOpenfoam_viaLLM/test/run_* | head -1
 
 ---
 
-## One-time setup (first time only)
+## First-time installation
 
-Follow [`project/README.md`](project/README.md) for full details.
+Do this **once** on a new machine. When finished, use [Quick reference](#quick-reference-returning-users) for every later run.
+
+Full package details: [`project/README.md`](project/README.md).
 
 ### macOS (validated)
 
@@ -86,6 +150,8 @@ conda activate cfd-agent-test
 nl-cfd-solver --help
 docker ps
 ```
+
+**First run:** pick a command from [Quick reference](#quick-reference-returning-users) (start with the 2D example).
 
 ### Windows (not validated)
 
@@ -126,11 +192,20 @@ cd Yijun_LocalOpenfoam_viaLLM/project
 pip install -e .
 ```
 
+After pulling code changes, refresh the CLI:
+
+```bash
+cd Yijun_LocalOpenfoam_viaLLM/project
+pip install -e .
+```
+
 ---
 
-## Run end-to-end (recommended)
+## Running simulations (more options)
 
-Use **`nl-cfd-solver`** from anywhere after setup (or `./nl-cfd-solver` from the repo root).
+Copy-paste commands for 2D / 3D / dry-run are in [Quick reference](#quick-reference-returning-users). This section adds a helper script, Windows variants, and fallbacks.
+
+Use **`nl-cfd-solver`** from anywhere after installation (or `./nl-cfd-solver` from the repo root).
 
 ### Option A — helper script (macOS / bash only)
 
@@ -144,30 +219,7 @@ The script starts Colima if needed, pulls the Docker image, runs the workflow, a
 
 ### Option B — manual commands (full control)
 
-**2D — macOS / Linux / Git Bash:**
-
-```bash
-conda activate cfd-agent-test
-export DOCKER_HOST=unix://$HOME/.colima/default/docker.sock   # macOS Colima only
-export MPLCONFIGDIR=../test/.matplotlib
-mkdir -p "$MPLCONFIGDIR"
-
-nl-cfd-solver --docker \
-  "圆柱直径0.1米，雷诺数100，来流速度1米每秒。" \
-  --output-dir ../test
-```
-
-**3D (coarse mesh, good for first test) — macOS / Linux / Git Bash:**
-
-```bash
-nl-cfd-solver --docker \
-  "三维，圆柱直径0.1米，雷诺数100，来流速度1米每秒。" \
-  --span 0.5 \
-  --max-iterations 200 \
-  --output-dir ../test/3d_coarse_run
-```
-
-**Windows (PowerShell):**
+Same 2D/3D examples as [Quick reference](#quick-reference-returning-users). **Windows (PowerShell):**
 
 ```powershell
 conda activate cfd-agent-test
@@ -189,6 +241,27 @@ PYTHONPATH=src python -m cfd_workflow.cli --docker "YOUR PROMPT" --output-dir ..
 
 ---
 
+## Solver and Reynolds number
+
+This prototype is built for **steady laminar cylinder flow** at low Reynolds numbers (matching the interview examples: Re 100, 150, 200).
+
+| What happens | Detail |
+|--------------|--------|
+| **Solver** | Always `simpleFoam` |
+| **Turbulence** | Always `simulationType laminar` (no k–ε, k–ω, or LES) |
+| **What Re is used for** | Compute missing U or ν, set `transportProperties`, report in `run_report.md` |
+| **Auto-switch to turbulent?** | **No** — high Re does not change solver or turbulence model |
+
+**Rough guidance for users:**
+
+- **Re ~ 40–1000** — intended range; laminar setup is reasonable.
+- **Re ~ 1000–10⁵** — run may still complete, but physics is **not** turbulent RANS/LES; treat results as illustrative only.
+- **Re > 10⁶** — rejected with “Reynolds number too high for laminar prototype defaults”.
+
+If you need turbulent cylinder results, you would need a future extension (RAS model, wall refinement, possibly `pimpleFoam` for unsteady effects). That is out of scope for the current prototype.
+
+---
+
 ## 2D vs 3D
 
 | | 2D (default) | 3D |
@@ -196,6 +269,7 @@ PYTHONPATH=src python -m cfd_workflow.cli --docker "YOUR PROMPT" --output-dir ..
 | **How to request** | Normal prompt (no dimension keyword) | Include `三维` or `3D` in the prompt, or pass `--dimension 3d` |
 | **Cylinder span** | n/a | `--span L` in meters, or default **10× diameter** |
 | **Mesh** | Standard background grid | **Coarse mesh by default** (faster); add `--fine-mesh` for finer 3D |
+| **Solver** | `simpleFoam`, laminar | Same — **no auto-switch** for high Re |
 | **Runtime** | Shorter | Longer — especially with `--fine-mesh` or large span |
 | **Velocity figure** | Full x–y plane | **z=0 mid-plane slice** (domain centered on z=0) |
 | **Cp figure** | Full cylinder perimeter | Points near **mid-span** (z≈0) |
@@ -379,9 +453,11 @@ pytest tests/unit -v
 | Docker errors on Windows (not validated) | Ensure Docker Desktop is running with WSL 2 backend; share the project drive in Docker Desktop **Settings → Resources → File sharing** if volume mounts fail |
 | `bash: /opt/openfoam2412/etc/bashrc` in logs | Harmless Docker image warning; ignore if steps succeed |
 | 3D prompt shows 2D in dry-run | Do not pass `--dimension 2d` unless you mean 2D; include `三维`/`3D` in the prompt or use `--dimension 3d` |
+| High Re (e.g. Re=50000) but laminar solver | Expected — prototype does not auto-switch; see [Solver and Reynolds number](#solver-and-reynolds-number) |
 | Run completes but `Converged: False` | Increase `--max-iterations` or relax `--residual-tol`; check `run_report.md` final residuals |
 | 3D run very slow | Default coarse mesh is intentional; avoid `--fine-mesh` until 2D/3D pipeline is validated |
 | `simulation_failed` | Open the log file named in the CLI **Issue:** line (e.g. `case/log.blockMesh`) |
+| `docker pull failed` / `registry-1.docker.io` **i/o timeout** | Docker Hub unreachable (common without VPN). **First pull** needs VPN: `docker pull opencfd/openfoam-default:2412`. After cached locally, re-runs skip pull. Check: `docker images opencfd/openfoam-default:2412` |
 | `postprocess_failed` | Check `case/VTK/` exists; see `case/log.foamToVTK` |
 | Matplotlib cache errors | Set `export MPLCONFIGDIR=../test/.matplotlib` |
 
@@ -389,6 +465,7 @@ pytest tests/unit -v
 
 ## Related docs
 
+- [`planning.md`](planning.md) — implementation plan, progress log, future work
 - [`project/README.md`](project/README.md) — environment, dependencies, OpenFOAM version, CLI reference
 - [`test/README.md`](test/README.md) — output folder conventions
 - [`development_log.md`](development_log.md) — build history and design decisions

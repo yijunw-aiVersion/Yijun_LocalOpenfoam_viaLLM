@@ -48,7 +48,9 @@ Each run writes `test/run_YYYYMMDD_HHMMSS/` with `case/`, `figures/`, and `run_r
 
 ## Quick run
 
-### 1. One-time setup
+> **Setup vs daily use:** First machine? Follow [First-time installation](USER_GUIDANCE.md#first-time-installation) in `USER_GUIDANCE.md`. Already installed? Use [Quick reference](USER_GUIDANCE.md#quick-reference-returning-users) only.
+
+### 1. First-time installation
 
 #### macOS (validated)
 
@@ -83,7 +85,7 @@ pip install -e .
 # 3. Optional: docker CLI via conda if `docker` is not on PATH
 conda install -c conda-forge docker-cli -y
 
-# 4. Pull OpenFOAM image (first run only; ~2 GB)
+# 4. Pull OpenFOAM image (first run only; ~2 GB. It may need VPN for image pulling if your network is in China)
 docker pull opencfd/openfoam-default:2412
 ```
 
@@ -98,11 +100,9 @@ docker run --rm opencfd/openfoam-default:2412 blockMesh -help
 
 On Windows you do **not** need `DOCKER_HOST` (Docker Desktop sets that up). The helper script `project/scripts/run_docker_simulation.sh` is bash-only — use the manual run commands below (PowerShell) or Git Bash / WSL.
 
-### 2. Run a simulation
+### 2. Run a simulation (returning users)
 
-**Recommended CLI:** `nl-cfd-solver` (after `pip install -e .` in `project/`). From the repo root you can also use `./nl-cfd-solver`.
-
-**2D example (macOS / Linux / Git Bash):**
+See [Quick reference](USER_GUIDANCE.md#quick-reference-returning-users) for copy-paste commands. Minimal example:
 
 ```bash
 conda activate cfd-agent-test
@@ -196,6 +196,7 @@ pytest tests/unit -v
 | Doc | Contents |
 |-----|----------|
 | [USER_GUIDANCE.md](USER_GUIDANCE.md) | Environment, CLI options, 2D/3D prompts, troubleshooting |
+| [planning.md](planning.md) | Implementation plan, progress log, design decisions |
 | [project/README.md](project/README.md) | Package details, agent architecture, dependencies |
 | [test/README.md](test/README.md) | Output folder conventions |
 | [problem_description.md](problem_description.md) | Interview / product requirements |
@@ -212,3 +213,4 @@ pytest tests/unit -v
 | Solver | `blockMesh` → `snappyHexMesh` → `simpleFoam` → `foamToVTK` |
 | Default iterations | 200 (`--max-iterations` to change) |
 | Convergence | Early stop when residuals ≤ `1e-5` (`--residual-tol`) |
+| Flow regime | **Laminar only** (`simpleFoam`); Re does not auto-enable turbulence — see [USER_GUIDANCE.md](USER_GUIDANCE.md) |

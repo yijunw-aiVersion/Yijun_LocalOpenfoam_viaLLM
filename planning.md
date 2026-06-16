@@ -1,7 +1,16 @@
 # CFD 自然语言仿真工作流 — 项目规划
 
 > 基于 `problem_description.md` 的产品原型实施计划。  
-> 代码与运行环境位于 `Yijun_LocalTest/project/`。
+> 代码与运行环境位于 **`Yijun_LocalOpenfoam_viaLLM/project/`**（仓库根目录下的 `project/`）。
+
+**相关文档（运行与维护）：**
+
+| 文档 | 用途 |
+|------|------|
+| [`README.md`](README.md) | 仓库结构 + 快速运行 |
+| [`USER_GUIDANCE.md`](USER_GUIDANCE.md) | 完整用户指南（安装 / 快速参考 / 2D·3D / 层流说明） |
+| [`project/README.md`](project/README.md) | 包细节、Agent 架构、CLI 参考 |
+| [`problem_description.md`](problem_description.md) | 原始需求 |
 
 ---
 
@@ -29,11 +38,14 @@
 
 | 项目 | 默认值 | 说明 |
 |------|--------|------|
-| 维度 | 2D（`empty` 前后平面） | 网格简单、算得快，符合面试原型 |
-| 雷诺数范围 | 40–500（层流） | 覆盖题目示例 Re=100/150/200 |
-| 求解器 | `pimpleFoam`（瞬态层流）或 `simpleFoam`（稳态） | Re<200 可用层流；原型优先 `simpleFoam` 求稳态场以加快演示 |
-| 网格 | `blockMesh` + 圆柱 `snappyHexMesh` 或纯 `blockMesh` 近似 | 首版用结构化 `blockMesh` + 圆柱障碍（snappyHexMesh 作为 Step 5 增强） |
+| 维度 | **2D 默认**；可选 **3D 有限长圆柱** | 2D：`empty` 前后平面；3D：span 沿 z，`zMin`/`zMax` slip |
+| 雷诺数范围 | **40–1000（层流原型）** | 题目示例 Re=100/150/200；Re≳1000 仅作演示，非湍流物理 |
+| 求解器 | **`simpleFoam` + `simulationType laminar`（固定）** | **不**根据 Re 自动切换湍流模型或 `pimpleFoam` |
+| 网格 | `blockMesh` + `snappyHexMesh` | 3D 默认 **粗网格**（20×14×nz）；`--fine-mesh` 可选 |
 | 流体 | 空气（ν≈1.5e-5 m²/s）/ 水（ν≈1e-6 m²/s） | 由用户指定或默认空气 |
+| 收敛 | 残差 early-stop | 默认 `--residual-tol 1e-5`（U、p 初始残差） |
+
+**Re 的作用（当前实现）**：补全 U / ν、写入 `transportProperties`、报告与校验；**不**改变求解器或湍流模型。Re > 10⁶ 校验拒绝。详见 `USER_GUIDANCE.md` → Solver and Reynolds number。
 
 **参数关系**（用于补全缺失量）：
 
@@ -74,51 +86,37 @@ D  = 2 * R
                          outputs/ (figures, logs, case)
 ```
 
-### 2.1 目录结构（`project/`）
+### 2.1 目录结构（`project/`）— 当前
 
 ```
 project/
-├── pyproject.toml              # 依赖与 pytest 配置
-├── requirements.txt            # 可 pip install -r
-├── README.md                   # 环境、OpenFOAM 版本、运行说明
-├── src/
-│   └── cfd_workflow/
-│       ├── __init__.py
-│       ├── models.py             # Pydantic 数据模型
-│       ├── parser/
-│       │   ├── __init__.py
-│       │   ├── nl_parser.py      # 自然语言解析
-│       │   └── units.py          # 单位识别与换算
-│       ├── physics/
-│       │   ├── __init__.py
-│       │   └── parameters.py     # Re/U/D 互推、流体物性
-│       ├── openfoam/
-│       │   ├── __init__.py
-│       │   ├── case_generator.py # Jinja2 渲染算例
-│       │   ├── runner.py         # subprocess 调用 OpenFOAM
-│       │   └── monitor.py        # 日志/残差监控
-│       ├── postprocess/
-│       │   ├── __init__.py
-│       │   └── visualize.py      # matplotlib 出图
-│       └── cli.py                # 命令行入口
+├── pyproject.toml              # 依赖 + nl-cfd-solver 入口点
+├── environment.yml             # conda 环境 cfd-agent-test
+├── README.md
+├── src/cfd_workflow/
+│   ├── cli.py                  # Typer CLI（nl-cfd-solver）
+│   ├── workflow.py             # 委托 CrewAI Flow
+│   ├── models.py
+│   ├── agents/                 # 7 个 stage agents
+│   ├── crew/                   # Flow, tools, YAML
+│   ├── parser/
+│   ├── physics/
+│   ├── openfoam/               # case_generator, runner, docker_runner, monitor
+│   └── postprocess/visualize.py
 ├── templates/
-│   └── cylinder_2d/              # OpenFOAM 模板 (Jinja2)
-│       ├── system/
-│       ├── constant/
-│       └── 0/
-├── tests/
-│   ├── unit/
-│   │   test_units.py
-│   │   test_nl_parser.py
-│   │   test_parameters.py
-│   │   test_case_generator.py
-│   │   test_monitor.py
-│   │   └── test_visualize.py
-│   └── integration/
-│       └── test_end_to_end.py    # 需 OpenFOAM 环境
-├── outputs/                      # 仿真结果（gitignore）
-└── runs/                         # 生成的算例（gitignore）
+│   ├── cylinder_2d/
+│   └── cylinder_3d/
+├── tests/unit/
+├── scripts/                    # Colima / Docker 辅助脚本
+└── ...
+
+仓库根目录：
+├── nl-cfd-solver               # 可选 wrapper
+├── test/                       # 运行输出 run_*（gitignore）
+├── README.md, USER_GUIDANCE.md, planning.md
 ```
+
+**编排**：CrewAI Flow，7 agents — `parser` → `physics` → `case` → **`setup_review`** → `simulation` → `visualization` → `report`（deterministic，默认无需 LLM API key）。
 
 ---
 
@@ -280,6 +278,8 @@ pip install -e ".[dev]"
 
 **Docker 路径**：`docker_runner.py` 改为逐步骤启动容器并流式输出（不再批量脚本），simpleFoam 阶段同样解析进度。
 
+**Early-stop（2026-06-15）**：U、p 初始残差 ≤ `--residual-tol`（默认 `1e-5`）时终止 `simpleFoam`；CLI/report 输出 `converged`、`stopped_early`、`final residuals`。
+
 **对应 Agent**：`simulation_agent` 写入 `simulation_progress`、`converged`、`residuals` 到 report。
 
 ---
@@ -308,88 +308,75 @@ pip install -e ".[dev]"
 
 ---
 
-### Step 3c — 2D / 3D 维度支持（2026-06-15）
+### Step 3c — 2D / 3D 维度支持
 
-**状态**：✅ 已实现
+**状态**：✅ 已实现（2026-06-15/16）
 
 **行为**：
 - **2D（默认）**：`frontAndBack` + `empty`，z 方向 1 层单元（伪 2D）
-- **3D**：有限长度圆柱，span 沿 z，`zMin`/`zMax` 为 slip 远场边界
-- NL 解析：`三维`/`3D`、`柱长`/`跨度`、`N倍直径`；CLI：`--dimension 2d|3d`、`--span L`
+- **3D**：有限长度圆柱，span 沿 z，`zMin`/`zMax` 为 slip 远场边界；域中心 **z=0**
+- NL 解析：`三维`/`3D`、`柱长`/`跨度`、`N倍直径`；CLI：`--dimension 2d|3d`（**默认 None**，从 prompt 推断，避免覆盖 NL 中的「三维」）
 - 3D 默认 **L = 10×D**；`setup_review` 输出 L/D 与 runtime 警告
+- **3D 粗网格（默认）**：background 约 20×14×5，snappy levels (1,2)，`maxGlobalCells` 120000；`--fine-mesh` 禁用 auto-coarse
+- **3D 可视化**：流速 **z=0 中平面 slice**；Cp 取 mid-span 表面点；VTK 仍导出至 `case/VTK/` 供 ParaView
 
 **模板**：`templates/cylinder_2d/` 与 `templates/cylinder_3d/`
+
+**验收**：Docker 粗网格 3D 端到端跑通（例：`test/3d_coarse_run/run_*`）。
 
 ---
 
 ### Step 5 — 后处理与可视化 (`postprocess/visualize.py`)
 
+**状态**：✅ 已实现（2026-06-15/16）
+
 **目标**：生成题目要求的两类图：
 
-1. **稳态流速场** — 速度大小云图（整个计算域）
-2. **圆柱表面压力场** — Cp 曲线或表面压力分布
+1. **稳态流速场** — 速度大小云图（2D 全域；3D 为 z=0 中平面）
+2. **圆柱表面压力场** — Cp 曲线（3D 为 mid-span）
 
-**需实现函数**：
+| 函数 | 说明 | 状态 |
+|------|------|------|
+| `plot_velocity_magnitude(...)` | pyvista 读 VTK；3D 时 `slice` at z=0 | ✅ |
+| `plot_surface_cp(...)` | 圆柱边界 Cp；3D 过滤 z≈0 | ✅ |
+| `generate_report(...)` | 汇总 PNG 路径 | ✅ |
 
-| 函数 | 说明 |
-|------|------|
-| `read_openfoam_field(case_dir, time, field)` | 读取 U/p（VTK 或 numpy） |
-| `export_vtk(case_dir)` | 调用 `foamToVTK` 或 Python 读 mesh |
-| `plot_velocity_magnitude(...)` | 流速云图 → PNG |
-| `plot_surface_cp(...)` | 圆柱表面 Cp → PNG |
-| `generate_report(case_dir, out_dir)` | 汇总输出 |
+**实现要点**：`matplotlib` 使用 `Agg` 后端（无 GUI）；场数据来自 `foamToVTK` + **pyvista**（未用 foamlib）。
 
-**需安装库**：
-
-| 库 | 用途 |
-|----|------|
-| `matplotlib` | 2D 云图、曲线 |
-| `numpy` | 数组运算 |
-| `vtk` 或 `pyvista` | 读取 OpenFOAM/VTK 网格与场 |
-| `foamlib` | 读写 OpenFOAM case（推荐，简化 mesh/field 读取） |
-
-**安装命令**：
-
-```bash
-pip install matplotlib numpy pyvista foamlib
-```
-
-**测试策略**：
-- **单元测试**：用小型 synthetic grid / fixture VTK 验证绘图函数不报错且输出文件存在
-- 图像 snapshot 测试可选（不强求）
-
-**验收**：`outputs/` 下生成 `velocity_field.png` 与 `surface_pressure.png`。
+**验收**：`figures/velocity_field.png` 与 `figures/surface_pressure.png` 写入每次 run。
 
 ---
 
 ### Step 6 — CLI 与端到端编排 (`cli.py`)
 
-**目标**：一条命令跑通全流程；支持交互式追问缺失参数。
+**状态**：✅ 已实现（2026-06-15/16）
 
-**需实现**：
+**入口**：
+- **`nl-cfd-solver`** — `pip install -e .` 后 conda/PATH 可用；仓库根 `./nl-cfd-solver` 为 fallback wrapper
+- 备选：`PYTHONPATH=src python -m cfd_workflow.cli`
+
+**主要选项**：`--docker`, `--dry-run`, `--output-dir`, `--max-iterations`, `--residual-tol`, `--dimension`, `--span`, `--coarse-mesh`, `--fine-mesh`
+
+**示例**：
 
 ```bash
-python -m cfd_workflow.cli run "圆柱直径0.1米，雷诺数100，来流速度1米每秒。"
-python -m cfd_workflow.cli run --interactive
-python -m cfd_workflow.cli run --dry-run  # 只解析+生成算例，不求解
+nl-cfd-solver --docker "圆柱直径0.1米，雷诺数100，来流速度1米每秒。" --output-dir ../test
+nl-cfd-solver --docker "三维，圆柱直径0.1米，雷诺数100，来流速度1米每秒。" --span 0.5 --output-dir ../test/3d_coarse_run
+nl-cfd-solver --dry-run "..." --output-dir ../test
 ```
-
-**需安装库**：
-
-| 库 | 用途 |
-|----|------|
-| `typer` 或 `click` | CLI 框架 |
-| `rich` | 输出美化 |
 
 **端到端检查清单**（对照 `problem_description.md`）：
 
-- [ ] 4 条示例 NL 均能正确解析
+- [x] 4 条示例 NL 均能正确解析
 - [x] 自动生成 OpenFOAM 算例（blockMesh + snappyHexMesh + 边界条件 + simpleFoam）
 - [x] 算例配置摘要展示（setup_review_agent / case_setup）
 - [x] 自动执行仿真并流式显示进度（迭代 + 残差）
-- [x] 检测收敛（或达到 maxIter）
+- [x] 检测收敛（early-stop 或达到 maxIter）
 - [x] 输出流速场与表面压力可视化
-- [ ] README 含 OpenFOAM 版本与运行说明
+- [x] 2D + 3D 支持；3D 粗网格默认
+- [x] README / USER_GUIDANCE / project/README 运行说明（含 nl-cfd-solver、层流 Re 说明）
+- [ ] Streamlit Web（可选，未做）
+- [ ] 湍流 Re 自动切换 RANS（**刻意不做**；见 §1.3 与 USER_GUIDANCE）
 
 ---
 
@@ -418,9 +405,10 @@ pythonpath = ["src"]
 项目提供 `project/environment.yml`，环境名为 **`cfd-agent-test`**：
 
 ```bash
-cd Yijun_LocalTest/project
+cd Yijun_LocalOpenfoam_viaLLM/project
 conda env create -f environment.yml
 conda activate cfd-agent-test
+pip install -e .
 pytest tests/unit -v
 ```
 
@@ -431,7 +419,7 @@ pytest tests/unit/test_case_generator.py -v
 pytest tests/integration -v -m openfoam
 
 # Phase D — 手动/CI 全流程
-python -m cfd_workflow.cli run "圆柱直径0.1米，雷诺数100，来流速度1米每秒。"
+nl-cfd-solver --docker "圆柱直径0.1米，雷诺数100，来流速度1米每秒。" --output-dir ../test
 ```
 
 ### 4.4 各模块单测文件与覆盖目标
@@ -471,9 +459,8 @@ pytest-cov>=4.1
 
 ### 5.2 系统
 
-- **OpenFOAM** v2212 / v2312 / v2406（README 中固定一个主推版本）
-- C++ 运行库（OpenFOAM 自带）
-- 可选：**ParaView**（调试可视化，非必须）
+- **OpenFOAM** **2412** — Docker 镜像 `opencfd/openfoam-default:2412`（macOS Colima + Windows Docker Desktop）
+- 可选：**ParaView** — 打开 `case/VTK/` 做交互 3D 查看
 
 ---
 
@@ -502,12 +489,69 @@ pytest-cov>=4.1
 
 ---
 
-## 8. 下一步行动
+## 8. 下一步行动（维护 / 扩展）
+
+**原型交付（当前）** — 已基本完成 Step 0–6 + 3b/3c；单元测试通过；2D/3D Docker 端到端验证。
+
+**可选后续（未实现）**：
+
+| 优先级 | 项 | 说明 |
+|--------|-----|------|
+| 低 | Streamlit Web | 演示用 UI |
+| 低 | `--viz-slice-z` / 多 z 截面 | 短 L/D 圆柱端效应对比 |
+| 中 | 高 Re 警告（代码内） | 文档已说明；可在 `parameter_warnings()` 加 Re 阈值提示 |
+| 大 | 湍流 RANS 分支 | k-ω SST + 壁面网格 + 可能 `pimpleFoam` 非定常；超出当前原型范围 |
+| 低 | 3D `--fine-mesh` 全量 Docker 测试 | 耗时长 |
+| 低 | Windows 实机验证 | 文档已标注 not validated |
+
+---
+
+## 9. 实施进度记录
+
+> 供日后查阅的设计决策与里程碑；按时间倒序。
+
+### 2026-06-16 — 文档与层流说明
+
+- **USER_GUIDANCE.md**：Quick reference（每会话） vs First-time installation（每台机器）分离；层流-only / Re 不自动切换湍流说明；示例 prompt 表
+- **README.md**：与 USER_GUIDANCE 对齐；`nl-cfd-solver` 为主入口
+- **planning.md**：本节进度记录 + 状态同步（本更新）
+
+### 2026-06-15/16 — 3D + 粗网格 + 可视化
+
+- 新增 `templates/cylinder_3d/`；parser 识别 `三维`/`3D`/span；`--dimension` 默认 **None**（修复 NL 三维被 CLI 默认 2d 覆盖）
+- 3D **默认粗网格**；`resolve_coarse_mesh()`；CLI `--coarse-mesh` / `--fine-mesh`
+- 3D 后处理：velocity z=0 slice；Cp mid-span；ParaView VTK 仍导出
+- Docker 粗网格 3D 跑通：`test/3d_coarse_run/run_*`
+
+### 2026-06-15 — 稳定性 + 可观测性 + CLI
+
+- **macOS 修复**：matplotlib `Agg`；CrewAI `tracing=False` / 抑制 trace 交互提示
+- **setup_review_agent**：算例配置摘要（problem §2）
+- **monitor.py**：流式进度、残差解析、`--residual-tol` early-stop
+- **nl-cfd-solver** 入口点；`docker_runner` 逐步容器执行
+- CrewAI Flow 7 agents 编排
+
+### 2026-06-12 前后 — 核心 Step 0–5
+
+- NL parser、physics 补全、case_generator（2D）、runner、visualize、report
+- 题目 4 条示例 NL golden tests
+- Colima + OpenFOAM 2412 Docker 路径
+
+### 刻意不做（记录备查）
+
+- **Re 高 → 自动湍流**：始终 `simpleFoam` + `laminar`；Re 仅用于 ν/U。湍流需单独 Phase。
+- **LLM 解析默认路径**：规则解析为主；CrewAI agents 为 deterministic wrapper。
+
+---
+
+## 10. 历史规划项（Step 0–3 初版）
+
+以下保留原 Step 0–3 规划细节供参考；实现状态见 §9。
 
 1. ✅ 完成本 `planning.md`
-2. ⬜ 创建 `project/` 脚手架（Step 0）
-3. ⬜ 编写 Step 1–2 单元测试并实现 parser + physics
-4. ⬜ 依次完成 Step 3–6，每步测试通过后推进
-5. ⬜ 运行端到端流程并对照第 6 节检查清单
+2. ✅ 创建 `project/` 脚手架（Step 0）
+3. ✅ Step 1–2 单元测试 + parser + physics
+4. ✅ Step 3–6 + 3b/3c
+5. ✅ 端到端流程 + 文档
 
 ---

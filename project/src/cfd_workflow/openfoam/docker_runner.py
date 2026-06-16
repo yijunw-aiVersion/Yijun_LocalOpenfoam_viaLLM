@@ -41,7 +41,21 @@ def _log_success(log_file: Path) -> bool:
     return "FOAM FATAL ERROR" not in text
 
 
+def _image_exists_locally(image: str) -> bool:
+    proc = subprocess.run(
+        ["docker", "image", "inspect", image],
+        env=_docker_env(),
+        capture_output=True,
+        text=True,
+    )
+    return proc.returncode == 0
+
+
 def ensure_image(image: str = DEFAULT_IMAGE, on_line: Optional[Callable[[str], None]] = None) -> None:
+    if _image_exists_locally(image):
+        if on_line:
+            on_line(f"Using local Docker image: {image}")
+        return
     if on_line:
         on_line(f"Pulling Docker image: {image}")
     proc = subprocess.run(
