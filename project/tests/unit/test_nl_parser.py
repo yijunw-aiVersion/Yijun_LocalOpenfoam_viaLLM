@@ -70,3 +70,17 @@ def test_radius_input_sets_diameter():
 def test_velocity_aliases():
     assert parse_velocity("流速2m/s").value == pytest.approx(2.0)
     assert parse_velocity("速度3米/秒").value == pytest.approx(3.0)
+
+
+def test_parse_dimension_and_span():
+    from cfd_workflow.models import SimulationDimension
+    from cfd_workflow.parser.nl_parser import parse_dimension, parse_span, parse_span_ratio
+
+    assert parse_dimension("三维圆柱绕流") == SimulationDimension.THREE_D
+    assert parse_dimension("2D simulation") == SimulationDimension.TWO_D
+    assert parse_span("柱长0.5米") == pytest.approx(0.5)
+    assert parse_span_ratio("10倍直径") == pytest.approx(10.0)
+
+    parsed = parse_nl_input("三维，圆柱直径0.1米，雷诺数100，来流速度1米每秒，柱长1米。")
+    assert parsed.dimension == SimulationDimension.THREE_D
+    assert parsed.span_m == pytest.approx(1.0)

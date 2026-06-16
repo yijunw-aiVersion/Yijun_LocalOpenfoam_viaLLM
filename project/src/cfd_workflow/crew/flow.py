@@ -17,6 +17,7 @@ from cfd_workflow.agents import (
     VisualizationAgent,
     WorkflowState,
 )
+from cfd_workflow.models import SimulationDimension
 from cfd_workflow.openfoam.case_generator import DEFAULT_MAX_ITERATIONS
 from cfd_workflow.openfoam.monitor import DEFAULT_RESIDUAL_TOL
 
@@ -105,6 +106,10 @@ def run_workflow_flow(
     use_docker: bool = False,
     max_iterations: int = DEFAULT_MAX_ITERATIONS,
     residual_tol: float = DEFAULT_RESIDUAL_TOL,
+    dimension_override: SimulationDimension | None = None,
+    span_override: float | None = None,
+    coarse_mesh: bool = False,
+    fine_mesh: bool = False,
     on_line=None,
 ) -> dict:
     """Execute the CFD workflow via CrewAI Flow and stage agents."""
@@ -115,6 +120,10 @@ def run_workflow_flow(
         use_docker=use_docker,
         max_iterations=max_iterations,
         residual_tol=residual_tol,
+        dimension_override=dimension_override,
+        span_override=span_override,
+        coarse_mesh=coarse_mesh,
+        fine_mesh=fine_mesh,
         on_line=on_line,
     )
     _configure_crewai_runtime()

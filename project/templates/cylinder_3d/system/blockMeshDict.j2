@@ -1,0 +1,74 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  Background mesh for 3D snappyHexMesh cylinder case.
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      blockMeshDict;
+}
+scale   1;
+
+vertices
+(
+    ( {{ x_min }} {{ y_min }} {{ -z_half }} )
+    ( {{ x_max }} {{ y_min }} {{ -z_half }} )
+    ( {{ x_max }} {{ y_max }} {{ -z_half }} )
+    ( {{ x_min }} {{ y_max }} {{ -z_half }} )
+    ( {{ x_min }} {{ y_min }} {{ z_half }} )
+    ( {{ x_max }} {{ y_min }} {{ z_half }} )
+    ( {{ x_max }} {{ y_max }} {{ z_half }} )
+    ( {{ x_min }} {{ y_max }} {{ z_half }} )
+);
+
+blocks
+(
+    hex (0 1 2 3 4 5 6 7) ({{ nx }} {{ ny }} {{ nz }}) simpleGrading (1 1 1)
+);
+
+edges
+(
+);
+
+boundary
+(
+    inlet
+    {
+        type patch;
+        faces ( (0 4 7 3) );
+    }
+    outlet
+    {
+        type patch;
+        faces ( (1 2 6 5) );
+    }
+    top
+    {
+        type patch;
+        faces ( (3 7 6 2) );
+    }
+    bottom
+    {
+        type patch;
+        faces ( (0 1 5 4) );
+    }
+    zMin
+    {
+        type patch;
+        faces
+        (
+            (0 3 2 1)
+        );
+    }
+    zMax
+    {
+        type patch;
+        faces
+        (
+            (4 5 6 7)
+        );
+    }
+);
+
+// ************************************************************************* //

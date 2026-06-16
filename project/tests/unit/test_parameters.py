@@ -79,3 +79,31 @@ def test_missing_fields_prompt():
     assert missing_fields_prompt(ParsedParams()) is not None
     assert "直径" in missing_fields_prompt(ParsedParams())
     assert missing_fields_prompt(ParsedParams(diameter_m=0.1, velocity_ms=1.0)) is None
+
+
+def test_complete_3d_default_span():
+    from cfd_workflow.models import SimulationDimension
+
+    parsed = ParsedParams(
+        diameter_m=0.1,
+        reynolds=100.0,
+        velocity_ms=1.0,
+        dimension=SimulationDimension.THREE_D,
+    )
+    complete = complete_parameters(parsed)
+    assert complete.dimension == SimulationDimension.THREE_D
+    assert complete.span_m == pytest.approx(1.0)
+    assert complete.span_ratio == pytest.approx(10.0)
+
+
+def test_complete_3d_custom_span_override():
+    from cfd_workflow.models import SimulationDimension
+
+    parsed = ParsedParams(diameter_m=0.1, reynolds=100.0, velocity_ms=1.0)
+    complete = complete_parameters(
+        parsed,
+        dimension_override=SimulationDimension.THREE_D,
+        span_override=0.5,
+    )
+    assert complete.span_m == pytest.approx(0.5)
+    assert complete.span_ratio == pytest.approx(5.0)

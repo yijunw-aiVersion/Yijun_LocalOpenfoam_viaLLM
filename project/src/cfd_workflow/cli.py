@@ -1,9 +1,19 @@
 from pathlib import Path
+from typing import Optional
 
 import typer
 
 from cfd_workflow.openfoam.case_generator import DEFAULT_MAX_ITERATIONS
 from cfd_workflow.openfoam.monitor import DEFAULT_RESIDUAL_TOL
+
+
+def _parse_dimension_option(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    normalized = value.lower()
+    if normalized not in {"2d", "3d"}:
+        raise typer.BadParameter("dimension must be '2d' or '3d'")
+    return normalized
 
 
 def main(
@@ -27,6 +37,28 @@ def main(
         max=1.0,
         help="Early-stop when U and p initial residuals fall below this (default 1e-5)",
     ),
+    dimension: Optional[str] = typer.Option(
+        None,
+        "--dimension",
+        callback=_parse_dimension_option,
+        help="Override simulation dimension: 2d or 3d (default: infer from prompt, else 2d)",
+    ),
+    span: float | None = typer.Option(
+        None,
+        "--span",
+        min=0.0,
+        help="3D cylinder span along z in meters (default: 10× diameter)",
+    ),
+    coarse_mesh: bool = typer.Option(
+        False,
+        "--coarse-mesh",
+        help="Force coarse background mesh (3D uses coarse mesh by default)",
+    ),
+    fine_mesh: bool = typer.Option(
+        False,
+        "--fine-mesh",
+        help="Disable auto-coarse mesh for 3D runs",
+    ),
 ) -> None:
     """Run a full CFD workflow from natural language input."""
     from cfd_workflow.workflow import run_workflow
@@ -41,10 +73,18 @@ def main(
         use_docker=docker,
         max_iterations=max_iterations,
         residual_tol=residual_tol,
+        dimension=dimension,
+        span=span,
+        coarse_mesh=coarse_mesh,
+        fine_mesh=fine_mesh,
         on_line=echo_line,
     )
     typer.echo(f"Status: {report['status']}")
     typer.echo(f"Run directory: {report['run_dir']}")
+    if report.get("parameters", {}).get("dimension"):
+        typer.echo(f"Dimension: {report['parameters']['dimension']}")
+    if report.get("parameters", {}).get("span_m"):
+        typer.echo(f"Span: {report['parameters']['span_m']} m")
     if report.get("residual_tol") is not None:
         typer.echo(f"Residual tolerance: {report['residual_tol']:.2e}")
     if report.get("converged") is not None:

@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from crewai.flow.runtime import FlowState
 
-from cfd_workflow.models import CompleteParams, ParsedParams
+from cfd_workflow.models import CompleteParams, ParsedParams, SimulationDimension
 from cfd_workflow.openfoam.case_generator import DEFAULT_MAX_ITERATIONS
 from cfd_workflow.openfoam.monitor import DEFAULT_RESIDUAL_TOL
 
@@ -35,6 +35,10 @@ class WorkflowState(FlowState):
     use_docker: bool = False
     max_iterations: int = DEFAULT_MAX_ITERATIONS
     residual_tol: float = DEFAULT_RESIDUAL_TOL
+    dimension_override: Optional[SimulationDimension] = None
+    span_override: Optional[float] = None
+    coarse_mesh: bool = False
+    fine_mesh: bool = False
     on_line: Optional[Callable[[str], None]] = None
 
     run_id: str = ""

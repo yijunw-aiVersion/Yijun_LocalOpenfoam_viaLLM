@@ -124,32 +124,49 @@ def format_case_setup_lines(config: dict[str, Any]) -> list[str]:
     solver = config["solver"]
 
     domain = geom["domain_m"]
+    dim = config.get("dimension", "2d")
     lines = [
         "=== OpenFOAM case configuration ===",
+        f"Dimension: {dim.upper()}",
         (
             f"Geometry: {geom['type']}, D={geom['diameter_m']} m, "
             f"domain x=[{domain['x_min']}, {domain['x_max']}] m, "
             f"y=[{domain['y_min']}, {domain['y_max']}] m"
         ),
-        (
-            f"Mesh: {mesh['background']} background "
-            f"({mesh['background_cells']['nx']}×{mesh['background_cells']['ny']}) "
-            f"+ {mesh['refinement']} around cylinder STL"
-        ),
-        (
-            f"Boundaries: inlet U={bc['inlet']['U']}, "
-            f"outlet p={bc['outlet']['p']}, cylinder={bc['cylinder']['U']}"
-        ),
-        (
-            f"Fluid: {fluid['name']}, rho={fluid['density_kgm3']} kg/m³, "
-            f"nu={fluid['kinematic_viscosity_m2s']:.6g} m²/s (Re={fluid['reynolds']})"
-        ),
-        (
-            f"Solver: {solver['name']} ({solver['turbulence']}), "
-            f"max_iterations={solver['max_iterations']}, "
-            f"write_interval={solver['write_interval']}, "
-            f"residual_tol={solver['convergence_tolerance']}"
-        ),
-        "=================================",
     ]
+    if dim == "3d" and domain.get("span_m") is not None:
+        lines.append(
+            f"Span: L={domain['span_m']} m (L/D={domain.get('span_ratio', domain['span_m'] / geom['diameter_m']):.1f})"
+        )
+    mesh_desc = (
+        f"Mesh: {mesh['background']} background "
+        f"({mesh['background_cells']['nx']}×{mesh['background_cells']['ny']}"
+    )
+    if "nz" in mesh["background_cells"]:
+        mesh_desc += f"×{mesh['background_cells']['nz']}"
+    mesh_desc += f") + {mesh['refinement']} around cylinder STL"
+    lines.append(mesh_desc)
+    bc = config["boundary_conditions"]
+    bc_line = (
+        f"Boundaries: inlet U={bc['inlet']['U']}, "
+        f"outlet p={bc['outlet']['p']}, cylinder={bc['cylinder']['U']}"
+    )
+    if "zMin_zMax" in bc:
+        bc_line += f", z faces={bc['zMin_zMax']['U']}"
+    lines.extend(
+        [
+            bc_line,
+            (
+                f"Fluid: {fluid['name']}, rho={fluid['density_kgm3']} kg/m³, "
+                f"nu={fluid['kinematic_viscosity_m2s']:.6g} m²/s (Re={fluid['reynolds']})"
+            ),
+            (
+                f"Solver: {solver['name']} ({solver['turbulence']}), "
+                f"max_iterations={solver['max_iterations']}, "
+                f"write_interval={solver['write_interval']}, "
+                f"residual_tol={solver['convergence_tolerance']}"
+            ),
+            "=================================",
+        ]
+    )
     return lines

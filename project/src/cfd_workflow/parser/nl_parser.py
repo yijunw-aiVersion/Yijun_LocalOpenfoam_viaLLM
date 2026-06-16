@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Optional
 
-from cfd_workflow.models import FluidType, ParsedParams
+from cfd_workflow.models import FluidType, ParsedParams, SimulationDimension
 from cfd_workflow.parser.units import length_to_meters, parse_length, parse_velocity, velocity_to_ms
 
 
@@ -28,6 +28,39 @@ def parse_fluid(text: str) -> Optional[FluidType]:
         return FluidType.WATER
     if re.search(r"空气|air", lowered):
         return FluidType.AIR
+    return None
+
+
+def parse_dimension(text: str) -> Optional[SimulationDimension]:
+    lowered = text.lower()
+    if re.search(r"三维|三d|3d|3\s*维|three.?dimension", lowered):
+        return SimulationDimension.THREE_D
+    if re.search(r"二维|二d|2d|2\s*维|two.?dimension", lowered):
+        return SimulationDimension.TWO_D
+    return None
+
+
+def parse_span(text: str) -> Optional[float]:
+    """Parse cylinder span / length along the z-axis (meters)."""
+    patterns = [
+        r"柱长\s*(\d+(?:\.\d+)?)\s*(米|m|cm|厘米|mm|毫米|meter|meters|centimeter|centimeters|millimeter|millimeters)?",
+        r"跨度\s*(\d+(?:\.\d+)?)\s*(米|m|cm|厘米|mm|毫米|meter|meters|centimeter|centimeters|millimeter|millimeters)?",
+        r"span\s*[:=]?\s*(\d+(?:\.\d+)?)\s*(m|cm|mm|meter|meters|centimeter|centimeters|millimeter|millimeters)?",
+        r"length\s*[:=]?\s*(\d+(?:\.\d+)?)\s*(m|cm|mm|meter|meters|centimeter|centimeters|millimeter|millimeters)?",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if match:
+            value = float(match.group(1))
+            unit = match.group(2) if match.lastindex >= 2 and match.group(2) else "m"
+            return length_to_meters(value, unit)
+    return None
+
+
+def parse_span_ratio(text: str) -> Optional[float]:
+    match = re.search(r"(\d+(?:\.\d+)?)\s*倍直径", text)
+    if match:
+        return float(match.group(1))
     return None
 
 
@@ -85,10 +118,20 @@ def parse_nl_input(text: str) -> ParsedParams:
     if velocity is not None:
         velocity_ms = velocity_to_ms(velocity.value, velocity.unit)
 
+    dimension = parse_dimension(text)
+    span_m = parse_span(text)
+    span_ratio = parse_span_ratio(text)
+    if dimension is None and (span_m is not None or span_ratio is not None):
+        dimension = SimulationDimension.THREE_D
+
     return ParsedParams(
         diameter_m=diameter_m,
         radius_m=radius_m,
         reynolds=parse_reynolds(text),
         velocity_ms=velocity_ms,
         fluid=parse_fluid(text),
+        dimension=dimension,
+        span_m=span_m if span_m is not None else (
+            None if span_ratio is None or diameter_m is None else span_ratio * diameter_m
+        ),
     )

@@ -39,6 +39,21 @@ def test_build_crewai_agents():
     assert agents["parser_agent"].role.strip()
 
 
+def test_workflow_dry_run_3d_from_nl_prompt(tmp_path: Path):
+    from cfd_workflow.models import SimulationDimension
+    from cfd_workflow.workflow import run_workflow
+
+    report = run_workflow(
+        "三维，圆柱直径0.1米，雷诺数100，来流速度1米每秒。",
+        tmp_path,
+        dry_run=True,
+    )
+    assert report["status"] == "dry_run_complete"
+    assert report["parameters"]["dimension"] == SimulationDimension.THREE_D.value
+    assert report["case_setup"]["dimension"] == "3d"
+    assert report["case_setup"]["geometry"]["type"].startswith("3D")
+
+
 @pytest.mark.parametrize(
     "prompt,expected_status",
     [

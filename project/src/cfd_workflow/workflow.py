@@ -14,11 +14,20 @@ def run_workflow(
     use_docker: bool = False,
     max_iterations: int | None = None,
     residual_tol: float | None = None,
+    dimension: str | None = None,
+    span: float | None = None,
+    coarse_mesh: bool = False,
+    fine_mesh: bool = False,
     on_line=None,
 ) -> dict:
     """Run NL → case → solver → plots pipeline via CrewAI Flow."""
+    from cfd_workflow.models import SimulationDimension
     from cfd_workflow.openfoam.case_generator import DEFAULT_MAX_ITERATIONS
     from cfd_workflow.openfoam.monitor import DEFAULT_RESIDUAL_TOL
+
+    dimension_override = None
+    if dimension is not None:
+        dimension_override = SimulationDimension(dimension.lower())
 
     return run_workflow_flow(
         prompt,
@@ -27,5 +36,9 @@ def run_workflow(
         use_docker=use_docker,
         max_iterations=max_iterations or DEFAULT_MAX_ITERATIONS,
         residual_tol=residual_tol if residual_tol is not None else DEFAULT_RESIDUAL_TOL,
+        dimension_override=dimension_override,
+        span_override=span,
+        coarse_mesh=coarse_mesh,
+        fine_mesh=fine_mesh,
         on_line=on_line,
     )

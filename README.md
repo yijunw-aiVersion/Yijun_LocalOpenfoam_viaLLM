@@ -1,8 +1,8 @@
 # Natural Language → OpenFOAM CFD Workflow
 
-End-to-end **2D cylinder flow** prototype: parse a natural-language prompt, generate an OpenFOAM case, run the solver (Docker or local), and produce velocity / surface-pressure figures.
+End-to-end **2D and 3D cylinder flow** prototype: parse a natural-language prompt, generate an OpenFOAM case, run the solver (Docker or local), and produce velocity / surface-pressure figures.
 
-Orchestration uses **CrewAI Flow** with **six stage agents** (deterministic — no LLM API key required for the default pipeline).
+Orchestration uses **CrewAI Flow** with **seven stage agents** (deterministic — no LLM API key required for the default pipeline).
 
 ---
 
@@ -12,6 +12,7 @@ Orchestration uses **CrewAI Flow** with **six stage agents** (deterministic — 
 Yijun_LocalOpenfoam_viaLLM/
 ├── README.md                 ← this file (structure + quick run)
 ├── USER_GUIDANCE.md          ← full setup, prompts, troubleshooting
+├── nl-cfd-solver             ← repo-root CLI wrapper (optional)
 ├── problem_description.md    ← original project requirements
 ├── project/                  ← Python package + OpenFOAM templates
 │   ├── src/cfd_workflow/
@@ -23,24 +24,25 @@ Yijun_LocalOpenfoam_viaLLM/
 │   │   ├── physics/          # parameter completion
 │   │   ├── openfoam/         # case gen + local/Docker runners
 │   │   └── postprocess/      # visualization
-│   ├── templates/cylinder_2d/  # Jinja2 OpenFOAM templates
+│   ├── templates/cylinder_2d/  # Jinja2 OpenFOAM templates (2D)
+│   ├── templates/cylinder_3d/  # Jinja2 OpenFOAM templates (3D)
 │   ├── scripts/              # Colima + Docker helpers
 │   ├── tests/unit/
 │   ├── environment.yml
 │   └── requirements.txt
 ├── test/                     ← runtime outputs (gitignored run_* folders)
-|    └── README.md
-|── user_log/                  # user log with viber coding local   
+│   └── README.md
+└── user_log/                 ← local development notes
 ```
 
 ### Agent pipeline
 
 ```
-prompt → parser_agent → physics_agent → case_agent
+prompt → parser_agent → physics_agent → case_agent → setup_review_agent
       → simulation_agent → visualization_agent → report_agent
 ```
 
-Each run writes `test/run_YYYYMMDD_HHMMSS/` with `case/`, `figures/`, and `run_report.md` (includes **Agent trace** for debugging).
+Each run writes `test/run_YYYYMMDD_HHMMSS/` with `case/`, `figures/`, and `run_report.md` (includes **case setup**, **simulation progress**, and **agent trace**).
 
 ---
 
@@ -54,6 +56,7 @@ Each run writes `test/run_YYYYMMDD_HHMMSS/` with `case/`, `figures/`, and `run_r
 cd project
 conda env create -f environment.yml
 conda activate cfd-agent-test
+pip install -e .                                    # installs `nl-cfd-solver` CLI
 conda install -c conda-forge colima docker-cli -y   # macOS Docker
 brew install qemu                                   # Colima QEMU mode
 
@@ -71,6 +74,7 @@ docker pull opencfd/openfoam-default:2412
 cd project
 conda env create -f environment.yml
 conda activate cfd-agent-test
+pip install -e .
 
 # 2. Docker Desktop for Windows (replaces Colima on macOS)
 #    https://docs.docker.com/desktop/setup/install/windows-install/
@@ -87,6 +91,7 @@ Verify on Windows:
 
 ```powershell
 conda activate cfd-agent-test
+nl-cfd-solver --help
 docker ps
 docker run --rm opencfd/openfoam-default:2412 blockMesh -help
 ```
@@ -95,7 +100,9 @@ On Windows you do **not** need `DOCKER_HOST` (Docker Desktop sets that up). The 
 
 ### 2. Run a simulation
 
-**macOS / Linux / Git Bash:**
+**Recommended CLI:** `nl-cfd-solver` (after `pip install -e .` in `project/`). From the repo root you can also use `./nl-cfd-solver`.
+
+**2D example (macOS / Linux / Git Bash):**
 
 ```bash
 conda activate cfd-agent-test
@@ -103,11 +110,20 @@ export DOCKER_HOST=unix://$HOME/.colima/default/docker.sock   # macOS Colima onl
 export CREWAI_STORAGE_DIR=../test/.crewai
 export MPLCONFIGDIR=../test/.matplotlib
 
-cd project
-PYTHONPATH=src python -m cfd_workflow.cli --docker \
+nl-cfd-solver --docker \
   "圆柱直径0.1米，雷诺数100，来流速度1米每秒。" \
   --max-iterations 200 \
-  --output-dir ../test
+  --output-dir test
+```
+
+**3D example (coarse mesh, auto-selected for 3D):**
+
+```bash
+nl-cfd-solver --docker \
+  "三维，圆柱直径0.1米，雷诺数100，来流速度1米每秒。" \
+  --span 0.5 \
+  --max-iterations 200 \
+  --output-dir test/3d_coarse_run
 ```
 
 **Windows (PowerShell):**
@@ -116,15 +132,13 @@ PYTHONPATH=src python -m cfd_workflow.cli --docker \
 conda activate cfd-agent-test
 $env:CREWAI_STORAGE_DIR = "..\test\.crewai"
 $env:MPLCONFIGDIR = "..\test\.matplotlib"
-cd project
-$env:PYTHONPATH = "src"
-python -m cfd_workflow.cli --docker `
+nl-cfd-solver --docker `
   "圆柱直径0.1米，雷诺数100，来流速度1米每秒。" `
   --max-iterations 200 `
   --output-dir ..\test
 ```
 
-Use `--max-iterations 500` (or any N ≥ 1) for longer `simpleFoam` runs. Default is **200** outer iterations.
+Use `--max-iterations N` for longer runs. The solver **stops early** when U and p residuals fall below `--residual-tol` (default `1e-5`).
 
 **Or use the helper script (macOS / bash only):**
 
@@ -132,17 +146,38 @@ Use `--max-iterations 500` (or any N ≥ 1) for longer `simpleFoam` runs. Defaul
 bash project/scripts/run_docker_simulation.sh "YOUR PROMPT HERE"
 ```
 
+**Fallback** (without installing the CLI entry point):
+
+```bash
+cd project
+PYTHONPATH=src python -m cfd_workflow.cli --docker "YOUR PROMPT" --output-dir ../test
+```
+
 ### 3. Check results
 
 The CLI prints the run directory. Open:
 
-- `test/run_*/figures/velocity_field.png`
-- `test/run_*/figures/surface_pressure.png`
-- `test/run_*/run_report.md` — status + agent trace
+- `test/run_*/figures/velocity_field.png` — 2D field, or **z=0 mid-plane slice** for 3D
+- `test/run_*/figures/surface_pressure.png` — cylinder Cp (mid-span for 3D)
+- `test/run_*/run_report.md` — status, case setup, convergence, agent trace
+- `test/run_*/case/VTK/` — ParaView / interactive 3D view
 
 ```bash
 ls -td test/run_* | head -1
 ```
+
+---
+
+## 2D vs 3D (at a glance)
+
+| | 2D (default) | 3D |
+|---|--------------|-----|
+| **Prompt hint** | omit dimension, or `--dimension 2d` | `三维` / `3D` in prompt, or `--dimension 3d` |
+| **Span** | n/a (single z-cell, empty BC) | `--span L` or default `10×` diameter |
+| **Mesh** | fine background grid | **coarse by default** (use `--fine-mesh` for finer) |
+| **Figures** | full x–y plane | velocity at **z=0**; Cp at mid-span |
+
+See [USER_GUIDANCE.md](USER_GUIDANCE.md) for more prompts and CLI options.
 
 ---
 
@@ -160,7 +195,7 @@ pytest tests/unit -v
 
 | Doc | Contents |
 |-----|----------|
-| [USER_GUIDANCE.md](USER_GUIDANCE.md) | Environment, CLI options, example prompts, debugging |
+| [USER_GUIDANCE.md](USER_GUIDANCE.md) | Environment, CLI options, 2D/3D prompts, troubleshooting |
 | [project/README.md](project/README.md) | Package details, agent architecture, dependencies |
 | [test/README.md](test/README.md) | Output folder conventions |
 | [problem_description.md](problem_description.md) | Interview / product requirements |
@@ -176,3 +211,4 @@ pytest tests/unit -v
 | Orchestration | CrewAI Flow + stage agents |
 | Solver | `blockMesh` → `snappyHexMesh` → `simpleFoam` → `foamToVTK` |
 | Default iterations | 200 (`--max-iterations` to change) |
+| Convergence | Early stop when residuals ≤ `1e-5` (`--residual-tol`) |

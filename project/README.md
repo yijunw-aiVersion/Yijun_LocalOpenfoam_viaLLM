@@ -1,6 +1,6 @@
 # CFD Workflow Builder
 
-Natural-language driven **2D cylinder flow** prototype using **OpenFOAM** (via Docker or local install).
+Natural-language driven **2D and 3D cylinder flow** prototype using **OpenFOAM** (via Docker or local install).
 
 **User guide (run from top to bottom):** [`../USER_GUIDANCE.md`](../USER_GUIDANCE.md)  
 **Development log:** [`../development_log.md`](../development_log.md)
@@ -67,13 +67,7 @@ cd Yijun_LocalOpenfoam_viaLLM/project
 pip install -e .
 ```
 
-```bash
-cd Yijun_LocalOpenfoam_viaLLM/project
-conda env create -f environment.yml
-conda activate cfd-agent-test
-```
-
-`environment.yml` installs: Python 3.11, pydantic, jinja2, typer, pytest, matplotlib, pyvista, numpy, **crewai**.
+`environment.yml` installs: Python 3.11, pydantic, jinja2, typer, pytest, matplotlib, pyvista, numpy, **crewai**, and the **`nl-cfd-solver`** entry point.
 
 ### 2a. Docker tooling — macOS (validated)
 
@@ -202,8 +196,10 @@ Different prompts create **separate** `run_*` folders — nothing is overwritten
 ## CLI reference
 
 ```bash
-PYTHONPATH=src python -m cfd_workflow.cli [OPTIONS] "NATURAL LANGUAGE PROMPT"
+nl-cfd-solver [OPTIONS] "NATURAL LANGUAGE PROMPT"
 ```
+
+Fallback: `PYTHONPATH=src python -m cfd_workflow.cli ...` from the `project/` directory.
 
 | Option | Description |
 |--------|-------------|
@@ -212,6 +208,20 @@ PYTHONPATH=src python -m cfd_workflow.cli [OPTIONS] "NATURAL LANGUAGE PROMPT"
 | `--dry-run` | Parse + generate case only; skip solver and plots |
 | `--max-iterations N` | `simpleFoam` outer iterations (default: 200) |
 | `--residual-tol X` | Early-stop when U and p residuals ≤ X (default: `1e-5`) |
+| `--dimension {2d,3d}` | Override dimension; if omitted, infer from prompt (else 2D) |
+| `--span L` | 3D cylinder length along z in meters (default: `10×` diameter) |
+| `--coarse-mesh` | Force coarse mesh; **3D auto-enables coarse** unless `--fine-mesh` |
+| `--fine-mesh` | Finer 3D mesh (40×30×nz; slower) |
+
+3D plots use a **z=0 mid-plane slice** for velocity and mid-span Cp (see `figures/` in each run).
+
+**3D example:**
+
+```bash
+nl-cfd-solver --docker \
+  "三维，圆柱直径0.1米，雷诺数100，来流速度1米每秒。" \
+  --span 0.5 --output-dir ../test/3d_coarse_run
+```
 
 ---
 
@@ -241,7 +251,8 @@ project/
 │   ├── physics/               # Parameter completion
 │   ├── openfoam/              # Case generator, local + Docker runners
 │   └── postprocess/           # Velocity + Cp plots
-├── templates/cylinder_2d/     # Jinja2 OpenFOAM templates
+├── templates/cylinder_2d/     # Jinja2 OpenFOAM templates (2D)
+├── templates/cylinder_3d/     # Jinja2 OpenFOAM templates (3D)
 ├── tests/unit/
 ├── scripts/
 │   ├── run_docker_simulation.sh

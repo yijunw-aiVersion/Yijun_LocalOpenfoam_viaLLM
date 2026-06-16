@@ -308,6 +308,20 @@ pip install -e ".[dev]"
 
 ---
 
+### Step 3c — 2D / 3D 维度支持（2026-06-15）
+
+**状态**：✅ 已实现
+
+**行为**：
+- **2D（默认）**：`frontAndBack` + `empty`，z 方向 1 层单元（伪 2D）
+- **3D**：有限长度圆柱，span 沿 z，`zMin`/`zMax` 为 slip 远场边界
+- NL 解析：`三维`/`3D`、`柱长`/`跨度`、`N倍直径`；CLI：`--dimension 2d|3d`、`--span L`
+- 3D 默认 **L = 10×D**；`setup_review` 输出 L/D 与 runtime 警告
+
+**模板**：`templates/cylinder_2d/` 与 `templates/cylinder_3d/`
+
+---
+
 ### Step 5 — 后处理与可视化 (`postprocess/visualize.py`)
 
 **目标**：生成题目要求的两类图：

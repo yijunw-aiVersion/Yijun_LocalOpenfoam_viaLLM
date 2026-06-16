@@ -47,10 +47,16 @@ class ReportAgent(StageAgent):
         ]
         if report.get("parameters"):
             p = report["parameters"]
-            md_lines.append(
+            param_line = (
                 f"- **Parameters:** D={p['diameter_m']} m, Re={p['reynolds']}, "
-                f"U={p['velocity_ms']} m/s, fluid={p['fluid']}"
+                f"U={p['velocity_ms']} m/s, fluid={p['fluid']}, dimension={p.get('dimension', '2d')}"
             )
+            if p.get("span_m"):
+                param_line += f", span={p['span_m']} m"
+            md_lines.append(param_line)
+        if report.get("warnings"):
+            md_lines.extend(["", "## Warnings", ""])
+            md_lines.extend(f"- {warning}" for warning in report["warnings"])
         if report.get("execution_mode"):
             md_lines.append(f"- **Execution:** {report['execution_mode']}")
         if report.get("case_setup"):

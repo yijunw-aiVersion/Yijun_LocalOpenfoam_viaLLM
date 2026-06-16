@@ -25,8 +25,14 @@ class VisualizationAgent(StageAgent):
                 figures_dir,
                 u_inf=state.params.velocity_ms,
                 rho=state.params.density_kgm3,
+                dimension=state.params.dimension,
             )
             state.report["figures"] = {k: str(v) for k, v in outputs.items()}
+            if state.params.dimension.value == "3d":
+                state.report["figure_notes"] = {
+                    "velocity_field": "Mid-plane slice at z=0 (compare with 2D cross-section)",
+                    "surface_pressure": "Cp on cylinder points near z=0 (mid-span)",
+                }
             state.report["status"] = "completed"
             return "success", f"Figures written to {figures_dir}"
         except Exception as exc:  # noqa: BLE001

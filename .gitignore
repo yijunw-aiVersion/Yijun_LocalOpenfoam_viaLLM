@@ -12,6 +12,7 @@ condaenv.*.requirements.txt
 
 # Run outputs (generated at runtime)
 test/run_*/
+test/3d_*/
 test/.matplotlib/
 test/.crewai/
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from cfd_workflow.agents.base import StageAgent
 from cfd_workflow.agents.state import WorkflowState
-from cfd_workflow.openfoam.case_generator import build_case_config
+from cfd_workflow.openfoam.case_generator import build_case_config, resolve_coarse_mesh
 from cfd_workflow.openfoam.monitor import format_case_setup_lines
 
 
@@ -19,10 +19,16 @@ class SetupReviewAgent(StageAgent):
             state.report.setdefault("issues", []).append(msg)
             return "failed", msg
 
+        coarse = resolve_coarse_mesh(
+            state.params,
+            coarse_mesh=state.coarse_mesh,
+            fine_mesh=state.fine_mesh,
+        )
         config = build_case_config(
             state.params,
             max_iterations=state.max_iterations,
             residual_tol=state.residual_tol,
+            coarse=coarse,
         )
         state.report["case_setup"] = config
         state.report["residual_tol"] = state.residual_tol
@@ -30,6 +36,8 @@ class SetupReviewAgent(StageAgent):
         if state.on_line:
             for line in format_case_setup_lines(config):
                 state.on_line(line)
+            for warning in state.report.get("warnings", []):
+                state.on_line(f"Warning: {warning}")
 
         if state.dry_run:
             state.report["status"] = "dry_run_complete"
